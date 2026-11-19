@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Indognito — initializing animation demo</title>
+<title>Indognito — initializing animation</title>
 <style>
   :root {
     --bg: #120d0c;
-    --yellow: #ffd23d;
-    --green: #3ccf6e;
-    --blue: #3d8bff;
-    --cell-off: #2a201d;
+    --grey: #26262b;      /* not started */
+    --yellow: #ffd23d;    /* about to start (flashing) / started (solid) */
+    --green: #3ccf6e;     /* finished */
+    --blue: #3d8bff;      /* active */
+    --shadow: 0 24px 60px rgba(0,0,0,.45);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -20,36 +21,32 @@
   }
   .stage { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
 
-  /* the 25x25 pixel grid, rendered as SVG, filling the background */
-  .init-grid { width: min(92vmin, 920px); height: auto; aspect-ratio: 1; display: block; }
-  .init-grid rect { rx: .18; fill: var(--cell-off); transition: fill .45s cubic-bezier(.2,.8,.2,1); }
-  .init-grid rect.s { fill: var(--yellow); animation: flash 1.1s steps(2, jump-none) infinite; }
-  .init-grid rect.p { fill: var(--yellow); animation: none; }
-  .init-grid rect.d { fill: var(--green); animation: none; }
-  .init-grid rect.b { fill: var(--blue); animation: none; transition: fill .6s ease; }
+  /* full-bleed 25x25 grid background */
+  .init-grid { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+  .init-grid rect { rx: .18; fill: var(--grey); transition: fill .45s cubic-bezier(.2,.8,.2,1); }
+  .init-grid rect.s { fill: var(--yellow); animation: flash 1.1s steps(2, jump-none) infinite; } /* about to start */
+  .init-grid rect.p { fill: var(--yellow); animation: none; }                                     /* started */
+  .init-grid rect.d { fill: var(--green); animation: none; }                                      /* finished */
+  .init-grid rect.b { fill: var(--blue); animation: none; transition: fill .6s ease; }            /* active */
   @keyframes flash { 0% { opacity: 1; } 50% { opacity: .28; } 100% { opacity: 1; } }
 
-  /* centered glassmorphic card */
+  /* centered glassmorphic rounded box */
   .glass {
-    position: relative; z-index: 2;
-    padding: 34px 44px;
-    border-radius: 24px;
+    position: relative; z-index: 1; text-align: center;
+    padding: 34px 44px; border-radius: 24px;
     background: rgba(26, 19, 18, .55);
-    border: 1px solid rgba(255, 220, 200, .16);
+    border: 1px solid rgba(255, 220, 200, .18);
     backdrop-filter: blur(18px) saturate(140%);
     -webkit-backdrop-filter: blur(18px) saturate(140%);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255,255,255,.06);
-    text-align: center;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.06);
   }
-  .glass h1 {
-    margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em;
-  }
+  .glass h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
   .glass p { margin: 8px 0 0; color: #c9b8b0; font-size: 14.5px; }
 </style>
 </head>
 <body>
   <div class="stage">
-    <svg class="init-grid" viewBox="0 0 25 25" id="grid" aria-hidden="true"></svg>
+    <svg class="init-grid" viewBox="0 0 25 25" preserveAspectRatio="xMidYMid slice" id="grid" aria-hidden="true"></svg>
     <div class="glass" role="status" aria-live="polite">
       <h1>Setting up Indognito.</h1>
       <p>This will take a minute.</p>
@@ -57,7 +54,11 @@
   </div>
 
 <script>
+  // Standalone demo of the initialization animation. In the real app this is driven by actual
+  // backend setup tasks + asset warming; here it runs on a simulated progress curve and loops.
   const N = 25, CELLS = N * N;
+  const PROC_BAND = 70;   // "started" (solid yellow) wave width
+  const SCHED_BAND = 95;  // "about to start" (flashing yellow) wave width ahead of it
   const svg = document.getElementById('grid');
   const rects = [];
   for (let i = 0; i < CELLS; i++) {
@@ -66,54 +67,53 @@
     r.setAttribute('y', Math.floor(i / N) + 0.08);
     r.setAttribute('width', 0.84);
     r.setAttribute('height', 0.84);
-    r.setAttribute('class', 's');
     r.style.animationDelay = (Math.random() * 1.1).toFixed(2) + 's';
     svg.appendChild(r);
     rects.push(r);
   }
 
-  // Demo progress loop: scheduled -> processing -> completed, in a randomized but
-  // progress-based order, then an all-at-once transition to blue and a reset so the
-  // demo page can loop indefinitely.
-  const order = [...Array(CELLS).keys()];
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  const shown = new Array(CELLS).fill('s');
-  let doneCount = 0;
+  let order, posOf, shown, prog, target, done;
 
-  function step() {
-    let changed = 0;
-    while (changed < 6 && doneCount < CELLS) {
-      const idx = order[doneCount];
-      if (shown[idx] !== 'p') { shown[idx] = 'p'; rects[idx].setAttribute('class', 'p'); }
-      else { shown[idx] = 'd'; rects[idx].setAttribute('class', 'd'); doneCount++; }
-      changed++;
-      if (doneCount >= CELLS) break;
+  function reset() {
+    order = [...Array(CELLS).keys()];
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    posOf = new Array(CELLS);
+    order.forEach((cell, pos) => { posOf[cell] = pos; });
+    shown = new Array(CELLS).fill('');
+    for (const r of rects) r.setAttribute('class', '');
+    prog = 0; target = 0; done = false;
+  }
+
+  function render() {
+    // simulate readiness creeping toward 1
+    target = Math.min(1, target + 0.0016 + Math.random() * 0.0016);
+    prog += Math.max((target - prog) * 0.06, prog < target ? 0.0012 : 0);
+    if (prog > target) prog = target;
+    const frontier = prog * CELLS;
+    for (let cell = 0; cell < CELLS; cell++) {
+      const i = posOf[cell];
+      let cls;
+      if (i < frontier - PROC_BAND) cls = 'd';
+      else if (i < frontier) cls = 'p';
+      else if (i < frontier + SCHED_BAND) cls = 's';
+      else cls = '';
+      if (shown[cell] !== cls) { shown[cell] = cls; rects[cell].setAttribute('class', cls); }
     }
-    if (doneCount >= CELLS) return finish();
-    requestAnimationFrame(() => setTimeout(step, 24));
+    if (prog >= 0.9999 && target >= 1 && !done) return finish();
+    requestAnimationFrame(render);
   }
 
   function finish() {
+    done = true;
+    for (const r of rects) r.setAttribute('class', 'd');   // all finished (green)
     setTimeout(() => {
-      for (const r of rects) r.setAttribute('class', 'b');
-      setTimeout(restart, 1800);
-    }, 900);
+      for (const r of rects) r.setAttribute('class', 'b'); // all active (blue)
+      setTimeout(() => { reset(); requestAnimationFrame(render); }, 5000); // "refresh" after 5s (demo loops)
+    }, 700);
   }
 
-  function restart() {
-    doneCount = 0;
-    for (let i = 0; i < CELLS; i++) { shown[i] = 's'; rects[i].setAttribute('class', 's'); }
-    for (let i = order.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [order[i], order[j]] = [order[j], order[i]];
-    }
-    setTimeout(step, 300);
-  }
-
-  step();
+  reset();
+  requestAnimationFrame(render);
 </script>
 </body>
 </html>
