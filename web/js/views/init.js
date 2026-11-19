@@ -9,21 +9,26 @@
 //   blue             = active (all at the end), then auto-refresh after 5 seconds
 import { api, h } from '../core.js';
 
-const N = 25, CELLS = N * N;
-const PROC_BAND = 70;   // width of the "started" (solid yellow) wave
-const SCHED_BAND = 95;  // width of the "about to start" (flashing yellow) wave ahead of it
+// Small cells (same size as the login background squares), as a responsive grid that fills the
+// viewport so every cell is visible.
+const CELL_PX = 46;
 
 export function showInit(mount, status) {
   const ns = 'http://www.w3.org/2000/svg';
+  const cols = Math.max(14, Math.round(window.innerWidth / CELL_PX));
+  const rows = Math.max(10, Math.round(window.innerHeight / CELL_PX));
+  const CELLS = cols * rows;
+  const PROC_BAND = Math.round(CELLS * 0.11);   // "started" (solid yellow) wave width
+  const SCHED_BAND = Math.round(CELLS * 0.15);  // "about to start" (flashing yellow) wave width
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${N} ${N}`);
+  svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
   svg.setAttribute('class', 'init-grid');
   svg.setAttribute('aria-hidden', 'true');
   const rects = [];
   for (let i = 0; i < CELLS; i++) {
     const r = document.createElementNS(ns, 'rect');
-    r.setAttribute('x', (i % N) + 0.08); r.setAttribute('y', Math.floor(i / N) + 0.08);
+    r.setAttribute('x', (i % cols) + 0.08); r.setAttribute('y', Math.floor(i / cols) + 0.08);
     r.setAttribute('width', 0.84); r.setAttribute('height', 0.84);
     r.style.animationDelay = `${(Math.random() * 1.1).toFixed(2)}s`;
     svg.append(r); rects.push(r);                 // no class = grey/black default
