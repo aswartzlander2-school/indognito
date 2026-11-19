@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indognito — initializing animation demo</title>
+<style>
+  :root {
+    --bg: #120d0c;
+    --yellow: #ffd23d;
+    --green: #3ccf6e;
+    --blue: #3d8bff;
+    --cell-off: #2a201d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: #f6ede8;
+    font: 15px/1.5 -apple-system, 'Segoe UI', Inter, system-ui, sans-serif;
+    display: grid; place-items: center; overflow: hidden;
+  }
+  .stage { position: relative; width: 100%; height: 100%; display: grid; place-items: center; }
+
+  /* the 25x25 pixel grid, rendered as SVG, filling the background */
+  .init-grid { width: min(92vmin, 920px); height: auto; aspect-ratio: 1; display: block; }
+  .init-grid rect { rx: .18; fill: var(--cell-off); transition: fill .45s cubic-bezier(.2,.8,.2,1); }
+  .init-grid rect.s { fill: var(--yellow); animation: flash 1.1s steps(2, jump-none) infinite; }
+  .init-grid rect.p { fill: var(--yellow); animation: none; }
+  .init-grid rect.d { fill: var(--green); animation: none; }
+  .init-grid rect.b { fill: var(--blue); animation: none; transition: fill .6s ease; }
+  @keyframes flash { 0% { opacity: 1; } 50% { opacity: .28; } 100% { opacity: 1; } }
+
+  /* centered glassmorphic card */
+  .glass {
+    position: relative; z-index: 2;
+    padding: 34px 44px;
+    border-radius: 24px;
+    background: rgba(26, 19, 18, .55);
+    border: 1px solid rgba(255, 220, 200, .16);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255,255,255,.06);
+    text-align: center;
+  }
+  .glass h1 {
+    margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em;
+  }
+  .glass p { margin: 8px 0 0; color: #c9b8b0; font-size: 14.5px; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <svg class="init-grid" viewBox="0 0 25 25" id="grid" aria-hidden="true"></svg>
+    <div class="glass" role="status" aria-live="polite">
+      <h1>Setting up Indognito.</h1>
+      <p>This will take a minute.</p>
+    </div>
+  </div>
+
+<script>
+  const N = 25, CELLS = N * N;
+  const svg = document.getElementById('grid');
+  const rects = [];
+  for (let i = 0; i < CELLS; i++) {
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x', (i % N) + 0.08);
+    r.setAttribute('y', Math.floor(i / N) + 0.08);
+    r.setAttribute('width', 0.84);
+    r.setAttribute('height', 0.84);
+    r.setAttribute('class', 's');
+    r.style.animationDelay = (Math.random() * 1.1).toFixed(2) + 's';
+    svg.appendChild(r);
+    rects.push(r);
+  }
+
+  // Demo progress loop: scheduled -> processing -> completed, in a randomized but
+  // progress-based order, then an all-at-once transition to blue and a reset so the
+  // demo page can loop indefinitely.
+  const order = [...Array(CELLS).keys()];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  const shown = new Array(CELLS).fill('s');
+  let doneCount = 0;
+
+  function step() {
+    let changed = 0;
+    while (changed < 6 && doneCount < CELLS) {
+      const idx = order[doneCount];
+      if (shown[idx] !== 'p') { shown[idx] = 'p'; rects[idx].setAttribute('class', 'p'); }
+      else { shown[idx] = 'd'; rects[idx].setAttribute('class', 'd'); doneCount++; }
+      changed++;
+      if (doneCount >= CELLS) break;
+    }
+    if (doneCount >= CELLS) return finish();
+    requestAnimationFrame(() => setTimeout(step, 24));
+  }
+
+  function finish() {
+    setTimeout(() => {
+      for (const r of rects) r.setAttribute('class', 'b');
+      setTimeout(restart, 1800);
+    }, 900);
+  }
+
+  function restart() {
+    doneCount = 0;
+    for (let i = 0; i < CELLS; i++) { shown[i] = 's'; rects[i].setAttribute('class', 's'); }
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    setTimeout(step, 300);
+  }
+
+  step();
+</script>
+</body>
+</html>
