@@ -161,3 +161,70 @@ export function registerFileRoutes(router, { workspaces, needUser, getLimits, au
   router.get('/api/files/download', serve('attachment'));
   router.get('/api/files/preview', serve('inline'));
 }
+
+// VM-backed File Explorer: when the terminal runtime is a MicroVM-Playground microVM, the File
+// Explorer operates on that same per-user VM (over the server's SFTP bridge) instead of the host
+// workspace — so files and the terminal share the isolated VM disk and the host is never touched.
+// MicroVM-Playground's file API exposes only list/read/write/download, so folder/upload/rename/
+// delete/permission operations are not available here (do those from the terminal in the VM).
+export function registerMachineFileRoutes(router, { machines, needUser }) {
+  const notSupported = (op) => { throw new HttpError(501, `${op} is not available for microVM files — use the terminal (it is the same machine).`); };
+
+  router.get('/api/files/list', async (req, res, { query }) => {
+    const user = needUser(req);
+    const path = query.get('path') || '/';
+    const r = await machines.list(user, path);
+    const entries = (r.entries || []).map((e) => ({
+      name: e.name, type: e.directory ? 'dir' : e.symlink ? 'link' : 'file',
+      size: e.size || 0, mtime: 0, mode: '', perm: '',
+    })).sort((a, b) => (a.type === 'dir') === (b.type === 'dir') ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1);
+    send(res, 200, { path: r.path || path, entries, usage: { used: 0, max: 0 }, machine: true });
+  });
+
+  router.get('/api/files/preview', async (req, res, { query }) => {
+    const user = needUser(req);
+    const path = query.get('path');
+    if (query.get('as') === 'text') {
+      try { const r = await machines.read(user, path); send(res, 200, { kind: 'text', content: r.content || '', size: (r.content || '').length }); }
+      catch (e) { if (/not utf-8/i.test(e.message)) return send(res, 200, { kind: 'binary', content: '', size: 0 }); throw new HttpError(400, e.message); }
+      return;
+    }
+    const buf = await machines.download(user, path);
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': buf.length, 'x-content-type-options': 'nosniff',
+      'content-disposition': `inline; filename*=UTF-8''${encodeURIComponent(path.split('/').pop() || 'file')}`, 'cache-control': 'private, no-store' });
+    res.end(buf);
+  });
+
+  router.get('/api/files/download', async (req, res, { query }) => {
+    const user = needUser(req);
+    const path = query.get('path');
+    const buf = await machines.download(user, path);
+    res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': buf.length,
+      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(path.split('/').pop() || 'file')}`, 'cache-control': 'private, no-store' });
+    res.end(buf);
+  });
+
+  router.post('/api/files/create', async (req, res) => {
+    const user = needUser(req);
+    const b = await readJson(req, 2 << 20);
+    const name = str(b.name, 'Name', { min: 1, max: 255 });
+    const path = (b.path === '/' ? '' : b.path || '') + '/' + name;
+    await machines.write(user, path.replace(/\/+/g, '/'), typeof b.content === 'string' ? b.content : '');
+    send(res, 200, { ok: true, path });
+  });
+
+  // Browser → machine: save a downloaded file into the user's VM so it appears in the terminal/files.
+  router.post('/api/machine/save', async (req, res) => {
+    const user = needUser(req);
+    const b = await readJson(req, 8 << 20);
+    const path = str(b.path, 'Path', { min: 1, max: 4096 });
+    await machines.write(user, path, typeof b.content === 'string' ? b.content : '');
+    send(res, 200, { ok: true });
+  });
+
+  router.post('/api/files/mkdir', () => notSupported('Creating folders'));
+  router.put('/api/files/upload', () => notSupported('Uploading'));
+  router.post('/api/files/delete', () => notSupported('Deleting'));
+  router.post('/api/files/rename', () => notSupported('Renaming'));
+  router.post('/api/files/chmod', () => notSupported('Changing permissions'));
+}

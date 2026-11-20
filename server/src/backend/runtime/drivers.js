@@ -66,7 +66,9 @@ export function detectDrivers(cfg) {
     if (r.status === 0) out.limits = 'cgroup';
   }
   const want = cfg.runtime?.driver || 'auto';
-  out.selected = want === 'auto' ? (out.sandbox ? 'sandbox' : 'process') : want;
+  // Prefer a fully-isolated microVM when a MicroVM-Playground server is configured, then the
+  // bubblewrap sandbox, then a plain process.
+  out.selected = want === 'auto' ? (out.microvm ? 'microvm' : out.sandbox ? 'sandbox' : 'process') : want;
   if (out.selected === 'sandbox' && !out.sandbox) out.selected = 'process';
   if (out.selected === 'microvm' && !out.microvm) out.selected = out.sandbox ? 'sandbox' : 'process';
   probe = out;

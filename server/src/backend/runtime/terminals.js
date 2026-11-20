@@ -2,14 +2,13 @@
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { detectDrivers, spawnLocal, frame } from './drivers.js';
-import { startMicroVm } from './microvm.js';
 
 const SCROLLBACK = 256 * 1024;
 
 export class Terminals extends EventEmitter {
-  constructor({ cfg, workspaces, settings, sampler }) {
+  constructor({ cfg, workspaces, settings, sampler, machines }) {
     super();
-    Object.assign(this, { cfg, workspaces, settings, sampler });
+    Object.assign(this, { cfg, workspaces, settings, sampler, machines });
     this.sessions = new Map();
   }
   probe() { return detectDrivers(this.cfg); }
@@ -51,7 +50,9 @@ export class Terminals extends EventEmitter {
     const p = this.probe();
     const network = this.settings.get('runtime.terminalNetwork', true);
     if (s.driver === 'microvm') {
-      s.rt = await startMicroVm({ ...this.cfg.runtime.microvm, name: `gnito-u${user.id}-${s.id.slice(0, 4)}`.toLowerCase(), limits, cols: s.cols, rows: s.rows });
+      // Attach to the user's persistent, isolated microVM (same VM backs the File Explorer and
+      // Browser). The VM has its own disk and never mounts host/user files.
+      s.rt = await this.machines.console(user, limits, { cols: s.cols, rows: s.rows });
     } else {
       const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, probe: p });
       const ev = new EventEmitter();

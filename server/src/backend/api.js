@@ -11,7 +11,7 @@ import {
   hashPassword, verifyPassword, dummyVerify, passwordProblems, createSession, sessionCookie, sessionUser,
   destroySession, rateLimit, newTotpSecret, verifyTotp, putChallenge, takeChallenge,
 } from './auth.js';
-import { registerFileRoutes } from './files.js';
+import { registerFileRoutes, registerMachineFileRoutes } from './files.js';
 import { measurable } from './runtime/procstats.js';
 
 const USERNAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/;
@@ -364,7 +364,10 @@ export function registerRoutes(router, ctx) {
     send(res, 200, { apps: db.prepare('SELECT * FROM apps WHERE enabled = 1 ORDER BY sort, name').all() });
   });
 
-  registerFileRoutes(router, { workspaces, needUser, getLimits, auditFn: log });
+  // On the isolated-microVM runtime the File Explorer operates on the user's VM (same machine as
+  // the terminal); otherwise on the host workspace folder.
+  if (ctx.machines?.enabled && terminals.probe().selected === 'microvm') registerMachineFileRoutes(router, { machines: ctx.machines, needUser });
+  else registerFileRoutes(router, { workspaces, needUser, getLimits, auditFn: log });
 
   // ---------- administration ----------
   router.get('/api/admin/users', async (req, res) => {
@@ -471,6 +474,7 @@ export function registerRoutes(router, ctx) {
     kickUser(target.id, 'Account deleted.');
     db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
     await workspaces.remove(target.id);
+    if (ctx.machines?.enabled) await ctx.machines.destroy(target.id).catch(() => {}); // tear down their isolated VM
     log(actor, 'admin.user_deleted', `user:${target.id}`, { username: target.username }, req);
     send(res, 200, { ok: true });
   });

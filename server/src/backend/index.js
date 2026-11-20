@@ -11,6 +11,7 @@ import { sessionUser } from './auth.js';
 import { Workspaces } from './runtime/workspaces.js';
 import { ProcSampler, hostStats } from './runtime/procstats.js';
 import { Terminals } from './runtime/terminals.js';
+import { Machines } from './runtime/machines.js';
 import { BrowserQueue } from './browserq.js';
 import { Initializer } from './init.js';
 import { registerRoutes } from './api.js';
@@ -33,9 +34,10 @@ if (fs.existsSync(reinitMarker)) {
 if (settings.get('init.completedAt')) seedApps(db); // pick up new catalog defaults after upgrades
 const workspaces = new Workspaces(cfg);
 const sampler = new ProcSampler();
-const terminals = new Terminals({ cfg, workspaces, settings, sampler });
+const machines = new Machines(cfg); // per-user isolated microVMs (only active when runtime.microvm.url is set)
+const terminals = new Terminals({ cfg, workspaces, settings, sampler, machines });
 const browserq = new BrowserQueue({ db, settings, cfg });
-const ctx = { cfg, db, settings, workspaces, sampler, terminals, browserq };
+const ctx = { cfg, db, settings, workspaces, sampler, terminals, browserq, machines };
 ctx.init = new Initializer(ctx);
 
 const router = new Router();
