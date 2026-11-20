@@ -1,4 +1,5 @@
-// Isolated browser: Scramjet (service-worker proxy) + Epoxy transport over this server's Wisp relay.
+// Isolated browser: Scramjet (service-worker proxy) + a selectable WASM transport (Epoxy or libcurl)
+// over this server's Wisp relay.
 // Server capacity is managed by a queue: when all browser slots are busy, the user sees "You're in line."
 import { api, h, icon, BASE, toast, state, fmtTime, logo, pixelBackground } from '../core.js';
 import { userMenu } from './shell.js';
@@ -80,11 +81,16 @@ function setupEngineOnce() {
   return enginePromise;
 }
 
-async function startEngine(ticket) {
+// Client-side transports. Both perform TLS to each website *inside* the page, so this server's
+// relay only ever sees encrypted bytes for https sites — the choice is about compatibility and
+// performance, not disguising traffic. The admin picks one; the server tells us which per session.
+const TRANSPORTS = { epoxy: 'vendor/epoxy/index.mjs', libcurl: 'vendor/libcurl/index.mjs' };
+
+async function startEngine(ticket, transport = 'epoxy') {
   const { scramjet, conn } = await setupEngineOnce();
   const wisp = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}wisp/${ticket}/`;
-  // Epoxy performs TLS to each website inside the page, so the relay only ever sees encrypted bytes for https sites.
-  await conn.setTransport(`${BASE}vendor/epoxy/index.mjs?v=${encodeURIComponent(state.version || '1')}`, [{ wisp }]);
+  const mod = TRANSPORTS[transport] || TRANSPORTS.epoxy;
+  await conn.setTransport(`${BASE}${mod}?v=${encodeURIComponent(state.version || '1')}`, [{ wisp }]);
   return { scramjet, conn, ticket };
 }
 
@@ -158,7 +164,7 @@ export async function showBrowser(mount) {
     if (r.status === 'expired') return request();
     // active
     try {
-      engine = await startEngine(r.ticket);
+      engine = await startEngine(r.ticket, r.transport);
     } catch (e) { return fail('network', e.message); }
     overlay(null);
     setStatus('ok', 'Session active');

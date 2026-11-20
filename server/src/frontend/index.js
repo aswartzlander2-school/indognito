@@ -16,6 +16,7 @@ const MOUNTS = [
   ['/vendor/scramjet/', path.join(NM, '@mercuryworkshop/scramjet/dist')],
   ['/vendor/baremux/', path.join(NM, '@mercuryworkshop/bare-mux/dist')],
   ['/vendor/epoxy/', path.join(NM, '@mercuryworkshop/epoxy-transport/dist')],
+  ['/vendor/libcurl/', path.join(NM, '@mercuryworkshop/libcurl-transport/dist')],
   ['/vendor/xterm/', path.join(NM, '@xterm/xterm')],
   ['/vendor/xterm-fit/', path.join(NM, '@xterm/addon-fit')],
   ['/vendor/webauthn/', path.join(NM, '@simplewebauthn/browser/dist/bundle')],

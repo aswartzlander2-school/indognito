@@ -183,8 +183,13 @@ off. For a private repository the check and download use your GitHub token (`gh 
   real process stats, a fair browser-session queue, and the Wisp relay.
 - **Terminals** run on a pseudo-terminal via the `gnito` helper; on Linux they are sandboxed
   with bubblewrap so a user's shell only sees their own workspace.
-- **Browser** uses Scramjet in a service worker, with Epoxy (TLS-in-browser) over the server's
-  Wisp relay — so for `https` sites the relay only ever carries encrypted bytes.
+- **Browser** uses Scramjet in a service worker, with a selectable WASM transport — **Epoxy**
+  (Rust TLS-in-browser, default) or **libcurl.js** — over the server's Wisp relay, so for `https`
+  sites the relay only ever carries encrypted bytes. The Owner picks the transport in
+  **Admin → Network policy**.
+- **Privacy.** The Wisp relay does not log the sites users visit (set `GNITO_WISP_LOG=debug` only
+  when troubleshooting), and per-account browsing history is **off by default** — each user opts in
+  from Settings. Indognito still does not hide or disguise its own traffic from the host network.
 
 See **[NOTICE.md](NOTICE.md)** for third-party licenses and the exact dependency patches.
 

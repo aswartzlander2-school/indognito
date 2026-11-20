@@ -3,7 +3,10 @@
 import crypto from 'node:crypto';
 import { server as wisp, logging } from '@mercuryworkshop/wisp-js/server';
 
-logging.set_level(logging.DEBUG);
+// Privacy: by default the relay does NOT log the sites users visit. Wisp's INFO/DEBUG levels print
+// every destination host and resolved IP; keep it at ERROR so browsing stays private. An admin can
+// raise it with GNITO_WISP_LOG for troubleshooting.
+logging.set_level(logging[(process.env.GNITO_WISP_LOG || 'ERROR').toUpperCase()] ?? logging.ERROR);
 
 const IDLE_MS = 90_000;        // slot released if no open relay socket and no heartbeat for this long
 const QUEUE_POLL_MS = 60_000;  // queued entries dropped if the client stops polling
@@ -48,6 +51,15 @@ export class BrowserQueue {
     return Math.max(1, Math.ceil((t - now) / 60_000));
   }
 
+  // Which client-side transport the browser engine should use to reach this server's Wisp relay.
+  // "epoxy": Rust/WASM TLS (default). "libcurl": libcurl.js/WASM. Both do TLS to each site *inside*
+  // the page, so the relay only sees encrypted bytes for https; the choice is about compatibility
+  // and performance, not disguising traffic. Admin-selectable.
+  transport() {
+    const t = this.settings.get('browser.transport', 'epoxy');
+    return t === 'libcurl' ? 'libcurl' : 'epoxy';
+  }
+
   userActive(userId) { return [...this.slots.values()].filter((s) => s.userId === userId).length; }
 
   request(user, limits) {
@@ -72,11 +84,11 @@ export class BrowserQueue {
     const ticket = crypto.randomBytes(18).toString('base64url');
     const runId = this.db.prepare('INSERT INTO browser_runs (user_id, started) VALUES (?, ?)').run(userId, Date.now()).lastInsertRowid;
     this.slots.set(ticket, { ticket, userId, started: Date.now(), lastActive: Date.now(), sockets: new Set(), runId, bytes: 0, queueId });
-    return { status: 'active', ticket, id: queueId || ticket };
+    return { status: 'active', ticket, id: queueId || ticket, transport: this.transport() };
   }
 
   status(id, userId) {
-    for (const s of this.slots.values()) if ((s.queueId === id || s.ticket === id) && s.userId === userId) return { status: 'active', ticket: s.ticket, id };
+    for (const s of this.slots.values()) if ((s.queueId === id || s.ticket === id) && s.userId === userId) return { status: 'active', ticket: s.ticket, id, transport: this.transport() };
     const i = this.queue.findIndex((q) => q.id === id && q.userId === userId);
     if (i < 0) return { status: 'expired', id };
     this.queue[i].lastPoll = Date.now();

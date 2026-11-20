@@ -33,6 +33,7 @@ export async function showSettings(mount) {
       h('div', { class: 'card col', style: { gap: '16px' } },
         field('Search engine', engine),
         h('label', { class: 'check' }, saveHist, 'Save browsing history to my account'),
+        h('p', { class: 'faint', style: { margin: '-6px 0 0', fontSize: '13px' } }, 'Off by default — your browsing is not recorded unless you turn this on.'),
         h('div', { class: 'row' },
           h('button', { class: 'btn danger sm', onclick: async () => { await api('api/browser/history', { method: 'DELETE' }); toast('History cleared'); } }, 'Clear history'),
           h('button', { class: 'btn sm', onclick: async () => { await clearBrowserData(); toast('Site cookies and storage on this device were cleared'); } }, 'Clear site data on this device'))),

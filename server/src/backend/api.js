@@ -264,11 +264,11 @@ export function registerRoutes(router, ctx) {
       db.prepare('UPDATE users SET search_engine = ? WHERE id = ?').run(b.searchEngine, u.id);
     }
     if (b.saveHistory !== undefined) settings.set(`user.${u.id}.saveHistory`, !!b.saveHistory);
-    send(res, 200, { user: publicUser(getUser(u.id)), saveHistory: settings.get(`user.${u.id}.saveHistory`, true) });
+    send(res, 200, { user: publicUser(getUser(u.id)), saveHistory: settings.get(`user.${u.id}.saveHistory`, false) });
   });
   router.get('/api/me/preferences', (req, res) => {
     const u = needUser(req);
-    send(res, 200, { searchEngine: u.search_engine, sessionHours: u.session_hours, saveHistory: settings.get(`user.${u.id}.saveHistory`, true), engines: SEARCH_ENGINES });
+    send(res, 200, { searchEngine: u.search_engine, sessionHours: u.session_hours, saveHistory: settings.get(`user.${u.id}.saveHistory`, false), engines: SEARCH_ENGINES });
   });
   router.get('/api/me/sessions', (req, res) => {
     const u = needUser(req);
@@ -341,7 +341,7 @@ export function registerRoutes(router, ctx) {
   });
   router.post('/api/browser/history', async (req, res) => {
     const u = needUser(req);
-    if (!settings.get(`user.${u.id}.saveHistory`, true)) return send(res, 200, { saved: false });
+    if (!settings.get(`user.${u.id}.saveHistory`, false)) return send(res, 200, { saved: false });
     const b = await readJson(req);
     const url = str(b.url, 'URL', { max: 2048 });
     if (!/^https?:\/\//i.test(url)) throw new HttpError(400, 'Only web addresses are recorded');
@@ -575,7 +575,7 @@ export function registerRoutes(router, ctx) {
 
   router.get('/api/admin/policy', (req, res) => {
     needPerm(req, 'policy.manage');
-    send(res, 200, { policy: browserq.policy(), capacity: browserq.capacity() });
+    send(res, 200, { policy: browserq.policy(), capacity: browserq.capacity(), transport: browserq.transport() });
   });
   router.put('/api/admin/policy', async (req, res) => {
     const actor = needPerm(req, 'policy.manage');
@@ -589,9 +589,10 @@ export function registerRoutes(router, ctx) {
     };
     settings.set('network.policy', policy);
     if (b.capacity !== undefined) settings.set('browser.capacity', int(b.capacity, 'Browser capacity', { min: 1, max: 500 }));
+    if (b.transport !== undefined) settings.set('browser.transport', b.transport === 'libcurl' ? 'libcurl' : 'epoxy');
     browserq.applyPolicy(); browserq.promote();
-    log(actor, 'admin.policy_updated', 'network', { ...policy, capacity: browserq.capacity() }, req);
-    send(res, 200, { policy, capacity: browserq.capacity() });
+    log(actor, 'admin.policy_updated', 'network', { ...policy, capacity: browserq.capacity(), transport: browserq.transport() }, req);
+    send(res, 200, { policy, capacity: browserq.capacity(), transport: browserq.transport() });
   });
 
   router.get('/api/admin/apps', (req, res) => { needPerm(req, 'policy.manage'); send(res, 200, { apps: db.prepare('SELECT * FROM apps ORDER BY sort, name').all() }); });

@@ -154,20 +154,25 @@ async function editRole(r, permissions) {
 }
 
 async function policy(pane) {
-  const { policy: p, capacity } = await api('api/admin/policy');
+  const { policy: p, capacity, transport } = await api('api/admin/policy');
   const mode = h('select', { class: 'input' }, h('option', { value: 'blocklist', selected: p.mode === 'blocklist' }, 'Block listed sites (allow everything else)'), h('option', { value: 'allowlist', selected: p.mode === 'allowlist' }, 'Allow only listed sites'));
   const block = h('textarea', { class: 'input mono', rows: 6, placeholder: 'example.com\n*.example.org' }, p.block.join('\n'));
   const allow = h('textarea', { class: 'input mono', rows: 6, placeholder: 'wikipedia.org\n*.edu' }, p.allow.join('\n'));
   const ports = h('select', { class: 'input' }, h('option', { value: 'web', selected: p.ports === 'web' }, 'Web ports only (80, 443, 8080, 8443)'), h('option', { value: 'any', selected: p.ports === 'any' }, 'Any port'));
   const cap = h('input', { class: 'input', type: 'number', min: 1, max: 500, value: capacity });
+  const trans = h('select', { class: 'input' },
+    h('option', { value: 'epoxy', selected: transport === 'epoxy' }, 'Epoxy (Rust/WASM TLS) — default'),
+    h('option', { value: 'libcurl', selected: transport === 'libcurl' }, 'libcurl.js (WASM)'));
   pane.replaceChildren(h('h3', {}, 'Network policy'),
     h('p', { class: 'muted' }, 'Applies to every browser session on this server. Private, local and loopback addresses are always refused. Indognito does not hide or disguise its traffic; see docs/NETWORK.md for what network security products will see.'),
     h('div', { class: 'card col', style: { gap: '16px' } }, field('Mode', mode),
       h('div', { class: 'form-grid' }, field('Blocked domains (one per line)', block), field('Allowed domains (allowlist mode)', allow)),
       h('div', { class: 'form-grid' }, field('Destination ports', ports), field('Concurrent browser sessions (server capacity)', cap)),
+      h('div', { class: 'form-grid' }, field('Browser transport', trans)),
+      h('p', { class: 'faint', style: { margin: 0, fontSize: '13px' } }, 'The transport is the WASM client that carries each page’s traffic from the browser engine to this server’s relay. Both do TLS to each site inside the page, so https stays encrypted end-to-end either way — pick whichever is more reliable for your users. Changes apply to new browser sessions.'),
       h('p', { class: 'faint', style: { margin: 0, fontSize: '13px' } }, 'When all sessions are in use, new visitors wait in a fair queue and see an estimated wait time based on recent session lengths.'),
       h('div', {}, h('button', { class: 'btn primary', onclick: async () => {
-        try { await api('api/admin/policy', { method: 'PUT', body: { mode: mode.value, block: block.value, allow: allow.value, ports: ports.value, capacity: Number(cap.value) } }); toast('Policy saved and applied'); }
+        try { await api('api/admin/policy', { method: 'PUT', body: { mode: mode.value, block: block.value, allow: allow.value, ports: ports.value, capacity: Number(cap.value), transport: trans.value } }); toast('Policy saved and applied'); }
         catch (e) { toast(e.message, true); }
       } }, 'Save policy'))));
 }
