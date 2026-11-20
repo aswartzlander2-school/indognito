@@ -74,7 +74,9 @@
     rects.push(r);
   }
 
-  let order, posOf, shown, prog, target, done;
+  // Realistic setup takes about 30 seconds (downloading + starting the programs).
+  const DURATION = 30000;
+  let order, posOf, shown, prog, target, done, startT, stalls;
 
   function reset() {
     order = [...Array(CELLS).keys()];
@@ -83,13 +85,17 @@
     order.forEach((cell, pos) => { posOf[cell] = pos; });
     shown = new Array(CELLS).fill('');
     for (const r of rects) r.setAttribute('class', '');
-    prog = 0; target = 0; done = false;
+    prog = 0; target = 0; done = false; startT = performance.now();
+    // A few brief stalls (like waiting on a download) so progress isn't robotically linear.
+    stalls = Array.from({ length: 5 }, () => 0.15 + Math.random() * 0.7).sort((a, b) => a - b);
   }
 
   function render() {
-    // simulate readiness creeping toward 1
-    target = Math.min(1, target + 0.0016 + Math.random() * 0.0016);
-    prog += Math.max((target - prog) * 0.06, prog < target ? 0.0012 : 0);
+    // Time-based progress over ~30s, held briefly at a few points for a realistic install feel.
+    let frac = Math.min(1, (performance.now() - startT) / DURATION);
+    for (const sp of stalls) { if (frac > sp - 0.02 && frac < sp + 0.03) { frac = sp - 0.02; break; } }
+    target = Math.max(target, frac);
+    prog += Math.max((target - prog) * 0.08, prog < target ? 0.0008 : 0);
     if (prog > target) prog = target;
     const frontier = prog * CELLS;
     for (let cell = 0; cell < CELLS; cell++) {
