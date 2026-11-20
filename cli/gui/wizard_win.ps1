@@ -46,6 +46,24 @@ function NumBox($v) {
   $t.Add_KeyPress({ if (-not [char]::IsDigit($_.KeyChar) -and -not [char]::IsControl($_.KeyChar)) { $_.Handled = $true } })
   return $t
 }
+function Select-InstallFolder($start) {
+  # Modern File Explorer-style folder picker: the standard Windows open dialog in folder mode (the
+  # filter hides files so only folders show). Open the folder you want and click Open. Falls back
+  # to the classic folder tree if the open dialog is unavailable.
+  try {
+    $d = New-Object Windows.Forms.OpenFileDialog
+    $d.Title = 'Open the folder to install into, then click Open'
+    $d.ValidateNames = $false; $d.CheckFileExists = $false; $d.CheckPathExists = $true
+    $d.Filter = 'Folders|*.__gnito_none__'; $d.FileName = 'Select this folder'
+    if ($start -and (Test-Path $start)) { $d.InitialDirectory = $start }
+    if ($d.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) { return (Split-Path -Parent $d.FileName) }
+    return $null
+  } catch {
+    $fb = New-Object Windows.Forms.FolderBrowserDialog
+    if ($fb.ShowDialog() -eq 'OK') { return $fb.SelectedPath }
+    return $null
+  }
+}
 function Table($headers, $rows) {
   $g = New-Object Windows.Forms.TableLayoutPanel
   $g.ColumnCount = $headers.Count; $g.AutoSize = $true; $g.CellBorderStyle = 'Single'; $g.Margin = '0,8,0,8'
@@ -150,7 +168,7 @@ function Show-Confirm {
     @('CPU allocation', "$($script:coreBox.Text) core(s) at $($script:pctBox.Text)%"), @('Installation destination', $script:dir))
   Para 'Continue lets you choose a different installation folder first.'
   Btn 'Install' { Show-Progress } $true
-  Btn 'Continue' { $d = New-Object Windows.Forms.FolderBrowserDialog; if ($d.ShowDialog() -eq 'OK') { $script:dir = Join-Path $d.SelectedPath 'Indognito' }; Show-Confirm }
+  Btn 'Continue' { $p = Select-InstallFolder $env:LOCALAPPDATA; if ($p) { $script:dir = Join-Path $p 'Indognito' }; Show-Confirm }
   Btn 'Cancel' { Abort }
 }
 
