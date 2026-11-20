@@ -128,8 +128,8 @@ function warmAssets() {
     'js/app.js', 'js/core.js',
     'js/views/onboarding.js', 'js/views/home.js', 'js/views/browser.js', 'js/views/terminal.js',
     'js/views/files.js', 'js/views/admin.js', 'js/views/settings.js', 'js/views/security.js', 'js/views/shell.js',
-    'fonts/inter/inter-latin-400-normal.woff2', 'fonts/bricolage/bricolage-grotesque-latin-800-normal.woff2',
-    'fonts/mono/jetbrains-mono-latin-400-normal.woff2',
+    'fonts/inter/inter-latin-wght-normal.woff2', 'fonts/bricolage/bricolage-grotesque-latin-800-normal.woff2',
+    'fonts/mono/jetbrains-mono-latin-wght-normal.woff2',
   ].map((u) => base + u);
   const fetches = urls.map((u) => fetch(u, { cache: 'force-cache' }).then((r) => r.arrayBuffer()).catch(() => {}));
   return Promise.race([

@@ -20,8 +20,8 @@ const MOUNTS = [
   ['/vendor/xterm-fit/', path.join(NM, '@xterm/addon-fit')],
   ['/vendor/webauthn/', path.join(NM, '@simplewebauthn/browser/dist/bundle')],
   ['/fonts/bricolage/', path.join(NM, '@fontsource/bricolage-grotesque/files')],
-  ['/fonts/inter/', path.join(NM, '@fontsource/inter/files')],
-  ['/fonts/mono/', path.join(NM, '@fontsource/jetbrains-mono/files')],
+  ['/fonts/inter/', path.join(NM, '@fontsource-variable/inter/files')],
+  ['/fonts/mono/', path.join(NM, '@fontsource-variable/jetbrains-mono/files')],
   ['/', WEB],
 ];
 

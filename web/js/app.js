@@ -35,7 +35,14 @@ async function route_() {
 async function boot() {
   let status;
   try { status = await api('api/setup/status'); }
-  catch { root.replaceChildren(h('div', { class: 'screen' }, h('div', { class: 'errpage' }, h('div', { class: 'code' }, 'INDOGNITO · backend-unreachable'), h('h1', {}, 'The Indognito backend is not responding'), h('p', {}, 'The web interface loaded, but the backend server did not answer. On the host, run "gnito status" or "gnito logs".')))); return; }
+  catch {
+    root.replaceChildren(h('div', { class: 'screen' }, h('div', { class: 'errpage', role: 'alert' },
+      h('div', { class: 'code' }, 'INDOGNITO · backend-unreachable'),
+      h('h1', {}, 'The Indognito backend isn’t responding'),
+      h('p', {}, 'The web interface loaded, but the backend server didn’t answer. It may still be starting, or it crashed. On the host, run ', h('code', { class: 'mono' }, 'gnito status'), ' or ', h('code', { class: 'mono' }, 'gnito logs'), '.'),
+      h('button', { class: 'btn primary', onclick: () => location.reload() }, 'Try again'))));
+    return;
+  }
   state.version = status.version;
   if (!status.initialized) return showInit(mount, status);
   if (!status.hasOwner) return showOnboarding(mount, status);

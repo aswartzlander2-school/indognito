@@ -59,11 +59,18 @@
     const e = E[code] || E.network;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(e.title)}</title><style>
-body{margin:0;background:#120d0c;color:#f6ede8;font:16px/1.55 system-ui,-apple-system,'Segoe UI',sans-serif}
-main{max-width:640px;margin:0 auto;padding:64px 28px}.code{font:13px ui-monospace,Menlo,monospace;color:#8f7d75}
-h1{font-size:32px;margin:10px 0 12px;letter-spacing:-.01em}p,li{color:#c9b8b0}.url{word-break:break-all;color:#ffb07a}
-details{margin-top:24px;color:#8f7d75;font-size:13px}pre{white-space:pre-wrap;background:#1a1312;border-radius:12px;padding:12px}
-button{margin-top:18px;height:42px;padding:0 22px;border-radius:999px;border:0;background:linear-gradient(100deg,#ff3b30,#ff6a2b 55%,#ff9a2e);color:#fff;font-weight:700;cursor:pointer}
+@font-face{font-family:'Inter Variable';font-weight:100 900;font-display:swap;src:url('/fonts/inter/inter-latin-wght-normal.woff2') format('woff2-variations')}
+@font-face{font-family:'JetBrains Mono Variable';font-weight:100 800;font-display:swap;src:url('/fonts/mono/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations')}
+:root{--mono:'JetBrains Mono Variable',ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#120d0c;color:#f6ede8;font:14.5px/1.55 'Inter Variable',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+main{max-width:520px;width:100%;padding:32px 30px;background:#211816;border:1px solid rgba(255,220,200,.16);border-radius:22px;box-shadow:0 24px 60px -24px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.05)}
+.code{font-family:var(--mono);font-size:12.5px;letter-spacing:.02em;color:#8f7d75}
+h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:10px 0 10px}p,li{color:#c9b8b0}p{line-height:1.55}
+.url{word-break:break-all;color:#ffb07a;font-family:var(--mono);font-size:13px}ul{padding-left:20px;font-size:14px}li{margin:3px 0}
+details{margin-top:18px;color:#8f7d75;font-size:13px}summary{cursor:pointer}pre{white-space:pre-wrap;font-family:var(--mono);background:#170f0e;border:1px solid rgba(255,220,200,.09);border-radius:12px;padding:12px}
+button{margin-top:18px;height:40px;padding:0 20px;border-radius:999px;border:0;background:linear-gradient(100deg,#ff3b30,#ff6a2b 55%,#ff9a2e);color:#fff;font-weight:600;font-family:inherit;font-size:14px;cursor:pointer}
+button:hover{filter:brightness(1.08)}
 </style></head><body><main><div class="code">INDOGNITO · ${esc(code)}</div><h1>${esc(e.title)}</h1><p>${esc(e.text)}</p>
 ${url ? `<p>Address: <span class="url">${esc(url)}</span></p>` : ''}<ul>${e.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
 <button onclick="location.reload()">Try again</button>
