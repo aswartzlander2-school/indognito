@@ -84,8 +84,8 @@ function Show-Checks {
   $checks = & $Gnito __wizard checks | ForEach-Object { $_ | ConvertFrom-Json }
   $fails = @()
   foreach ($c in $checks) {
-    $mark = if ($c.ok) { '✓' } elseif ($c.fatal) { '✗' } else { '!' }
-    $list.Items.Add(" $mark  $($c.label) — $($c.detail)") | Out-Null
+    $mark = if ($c.ok) { '+' } elseif ($c.fatal) { 'x' } else { '!' }
+    $list.Items.Add(" $mark  $($c.label) - $($c.detail)") | Out-Null
     $pb.Value = [Math]::Min(10, $list.Items.Count); [Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 120
     if ($c.fatal -and -not $c.ok) { $fails += "$($c.label): $($c.detail)" }
   }
@@ -160,7 +160,7 @@ function Show-Progress {
   $pb = New-Object Windows.Forms.ProgressBar; $pb.Width = 720; $body.Controls.Add($pb)
   $labels = @{}
   foreach ($k in @(@('activity', 'Current activity'), @('component', 'Most recently installed'), @('dir', 'Installation directory'), @('transfer', 'Download / extraction'))) {
-    $l = New-Object Windows.Forms.Label; $l.AutoSize = $true; $l.MaximumSize = New-Object Drawing.Size(720, 0); $l.Text = "$($k[1]): —"; $body.Controls.Add($l); $labels[$k[0]] = @($l, $k[1])
+    $l = New-Object Windows.Forms.Label; $l.AutoSize = $true; $l.MaximumSize = New-Object Drawing.Size(720, 0); $l.Text = "$($k[1]): -"; $body.Controls.Add($l); $labels[$k[0]] = @($l, $k[1])
   }
   Btn 'Cancel' { Abort 'Installation was cancelled while in progress.' }
   $data = Join-Path $script:dir 'data'

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -188,6 +189,11 @@ func runWizard(existing *Install, tui bool) int {
 
 func extract(dir, name string) string {
 	b, _ := guiFiles.ReadFile(name)
+	// Windows PowerShell reads a .ps1 as ANSI unless it has a UTF-8 BOM; prepend one so any
+	// non-ASCII in the script can't be mis-decoded (which corrupts and breaks parsing).
+	if strings.HasSuffix(name, ".ps1") && !bytes.HasPrefix(b, []byte{0xEF, 0xBB, 0xBF}) {
+		b = append([]byte{0xEF, 0xBB, 0xBF}, b...)
+	}
 	p := filepath.Join(dir, filepath.Base(name))
 	_ = os.WriteFile(p, b, 0o600)
 	return p
