@@ -17,3 +17,6 @@ data/
 .DS_Store
 *.swp
 dist/
+
+# stray CLI build artifact
+/cli/cli

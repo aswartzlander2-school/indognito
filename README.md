@@ -35,7 +35,7 @@ terminals run unsandboxed.
 
 ```sh
 sudo apt update && sudo apt install -y python3-gi gir1.2-gtk-3.0 bubblewrap   # optional: GUI wizard + sandbox
-curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+curl -fsSL https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.sh | sh
 gnito start
 ```
 
@@ -43,7 +43,7 @@ gnito start
 
 ```sh
 sudo dnf install -y python3-gobject gtk3 bubblewrap                            # optional: GUI wizard + sandbox
-curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+curl -fsSL https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.sh | sh
 gnito start
 ```
 
@@ -51,7 +51,7 @@ gnito start
 
 ```sh
 sudo pacman -S --needed python-gobject gtk3 bubblewrap                         # optional: GUI wizard + sandbox
-curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+curl -fsSL https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.sh | sh
 gnito start
 ```
 
@@ -60,7 +60,7 @@ gnito start
 ```sh
 # Install python3 + GTK3 bindings (or Tk) and bubblewrap with your package manager for the
 # graphical wizard and sandboxed terminals; otherwise the text wizard is used.
-curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+curl -fsSL https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.sh | sh
 gnito start
 ```
 
@@ -68,14 +68,14 @@ gnito start
 
 ```sh
 # Tk ships with the system Python (used for the wizard). If needed: brew install python-tk
-curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+curl -fsSL https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.sh | sh
 gnito start
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.ps1 | iex
+irm https://github.com/aswartzlander2-school/indognito/releases/latest/download/install.ps1 | iex
 gnito start
 ```
 
@@ -83,9 +83,11 @@ The installer places `gnito` on your PATH (`/usr/local/bin`, else `~/.local/bin`
 `%LOCALAPPDATA%\Indognito\bin`). Open a new terminal after installing so the PATH change takes
 effect.
 
-> **Availability.** The one-line installers pull the `gnito` binary from this repository's GitHub
-> releases. They work once the release artifacts are published (and, for a private repo, when you
-> have access). To run it today without releases, use **[Build from source](#build-from-source)**.
+> **Availability.** The one-line installers (`install/install.sh`, `install/install.ps1`) are
+> published as assets on each GitHub release by `scripts/build-release.sh`, alongside the `gnito`
+> binaries. They work once a release is published; for a private repo the installer uses a GitHub
+> token (`GH_TOKEN`/`GITHUB_TOKEN`, or the `gh` CLI) to fetch assets. To run it today without a
+> release, use **[Build from source](#build-from-source)**.
 
 ### Tested status
 
