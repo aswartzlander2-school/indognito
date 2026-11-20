@@ -99,7 +99,8 @@
     target = Math.max(target, frac);
     prog += Math.max((target - prog) * 0.08, prog < target ? 0.0008 : 0);
     if (prog > target) prog = target;
-    const frontier = prog * CELLS;
+    // Start fully black (no lit squares), end fully green: sweep from before the first cell to past the last.
+    const frontier = -SCHED_BAND + prog * (CELLS + PROC_BAND + SCHED_BAND);
     for (let cell = 0; cell < CELLS; cell++) {
       const i = posOf[cell];
       let cls;

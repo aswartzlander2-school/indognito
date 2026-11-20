@@ -86,7 +86,9 @@ export function showInit(mount, status) {
     // Ease toward the target, with a tiny floor so the wave always drifts forward.
     prog += Math.max((t - prog) * 0.06, prog < t ? 0.0012 : 0);
     if (prog > t) prog = t;
-    const frontier = prog * CELLS;
+    // Offset the frontier so the animation begins fully black (no lit squares) and ends fully green:
+    // it sweeps from just before the first cell to just past the last.
+    const frontier = -SCHED_BAND + prog * (CELLS + PROC_BAND + SCHED_BAND);
     for (let cell = 0; cell < CELLS; cell++) {
       const i = posOf[cell];
       let cls;
