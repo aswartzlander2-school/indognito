@@ -71,6 +71,7 @@ func cmdWizardAPI(args []string) int {
 			jsonOut(Progress{Error: err.Error()})
 			return 1
 		}
+		b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF}) // strip a UTF-8 BOM (PowerShell's Set-Content adds one)
 		var p struct {
 			Plan
 			Env map[string]string `json:"env"`
@@ -177,6 +178,7 @@ func runWizard(existing *Install, tui bool) int {
 	runErr := cmd.Run()
 	var res WizardResult
 	if b, err := os.ReadFile(resultFile); err == nil {
+		b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF}) // strip a UTF-8 BOM from the wizard's result file
 		_ = json.Unmarshal(b, &res)
 	} else if runErr != nil {
 		// The graphical wizard crashed before writing a result (e.g. a toolkit error). Rather than

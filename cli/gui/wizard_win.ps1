@@ -17,7 +17,7 @@ function Api([string[]]$a) {
   if ($out) { return $out | ConvertFrom-Json } else { return @{} }
 }
 function Write-Result($outcome, $reason) {
-  if ($Result) { @{ outcome = $outcome; reason = $reason } | ConvertTo-Json | Set-Content -Path $Result -Encoding UTF8 }
+  if ($Result) { [System.IO.File]::WriteAllText($Result, (@{ outcome = $outcome; reason = $reason } | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false)) }
 }
 
 $form = New-Object Windows.Forms.Form
@@ -186,7 +186,7 @@ function Show-Progress {
   $envs = @{}; foreach ($k in 'GNITO_RELEASE_URL', 'GNITO_BUNDLE', 'GNITO_DEV_RELAX', 'GNITO_NODE_VERSION') { $v = [Environment]::GetEnvironmentVariable($k); if ($v) { $envs[$k] = $v } }
   $plan = @{ mode = $script:mode; backend = [int]$script:beBox.Text; frontend = [int]$script:feBox.Text; ramMB = [int]$script:ramBox.Text; storageMB = [int]$script:stBox.Text
     cpuCores = [int]$script:coreBox.Text; cpuPercent = [int]$script:pctBox.Text; installDir = $script:dir; dataDir = $data; keepData = $true; stateFile = $State; env = $envs }
-  $pf = Join-Path $Tmp 'plan.json'; $plan | ConvertTo-Json | Set-Content -Path $pf -Encoding UTF8
+  $pf = Join-Path $Tmp 'plan.json'; [System.IO.File]::WriteAllText($pf, ($plan | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
   $log = Join-Path $Tmp 'progress.jsonl'
   $psi = New-Object Diagnostics.ProcessStartInfo
   if ($script:mode -eq 'admin') {

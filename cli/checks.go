@@ -119,7 +119,7 @@ func runChecks() []Check {
 
 func relaxNote(ok bool) string {
 	if !ok && relaxed() {
-		return " — below minimum, allowed because GNITO_DEV_RELAX=1 (development only)"
+		return " - below minimum, allowed because GNITO_DEV_RELAX=1 (development only)"
 	}
 	return ""
 }
