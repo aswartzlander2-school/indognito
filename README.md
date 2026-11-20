@@ -4,7 +4,7 @@
 
 **A self-hosted, isolated browser, terminal, file workspace and admin platform — in the browser.**
 
-`v1.0.0` · AGPL-3.0
+`v0.1.0` · AGPL-3.0
 
 </div>
 

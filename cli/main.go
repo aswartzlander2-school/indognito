@@ -19,8 +19,8 @@ import (
 	"strings"
 )
 
-// Version is set at build time: -ldflags "-X main.Version=1.0.0"
-var Version = "1.0.0"
+// Version is set at build time: -ldflags "-X main.Version=0.1.0"
+var Version = "0.1.0"
 
 // ReleaseURL is where app bundles are downloaded from; override with GNITO_RELEASE_URL.
 var ReleaseURL = "https://github.com/aswartzlander2-school/indognito/releases/download/v{version}"
@@ -60,6 +60,8 @@ Commands:
   re-install   Reinstall over an existing installation
   uninstall    Remove Indognito from this machine
   logs         Show the server log (use -f to follow)
+  update       Download and install the latest version
+  check-update Check whether a newer version is available
   version      Print the version
 
 Options:
@@ -73,6 +75,13 @@ func main() {
 		return
 	}
 	cmd, args := os.Args[1], os.Args[2:]
+
+	// Before user-facing commands, show an update banner (from the last cached check) and, if the
+	// cache is stale, refresh it in the background. Internal subcommands are skipped.
+	if !strings.HasPrefix(cmd, "__") && cmd != "update" && cmd != "check-update" && cmd != "version" && cmd != "-v" && cmd != "--version" {
+		updateBannerIfAvailable()
+	}
+
 	var code int
 	switch cmd {
 	case "start":
@@ -89,6 +98,10 @@ func main() {
 		code = cmdUninstall(args)
 	case "logs":
 		code = cmdLogs(args)
+	case "update":
+		code = cmdUpdate(args)
+	case "check-update", "check-updates":
+		code = cmdCheckUpdate()
 	case "version", "--version", "-v":
 		fmt.Printf("gnito %s (%s/%s)\n", Version, runtime.GOOS, runtime.GOARCH)
 	case "help", "--help", "-h":
@@ -101,6 +114,8 @@ func main() {
 		code = cmdServe()
 	case "__bundle": // release builds: gnito __bundle <repo-root> <out.tar.gz>
 		code = cmdBundle(args)
+	case "__checkupdate": // detached background update check
+		code = cmdCheckUpdateBackground()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %q. Run \"gnito help\".\n", cmd)
 		code = 2

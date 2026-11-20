@@ -6,7 +6,7 @@
 # PATH — no administrator rights needed. Then run `gnito start`: setup runs once, on the first start.
 #
 # Options (environment variables):
-#   $env:GNITO_VERSION = "1.0.0"   a specific version (default: the latest release)
+#   $env:GNITO_VERSION = "0.1.0"   a specific version (default: the latest release)
 #   $env:GNITO_BIN_DIR = "C:\..."  where to put gnito.exe (default: %LOCALAPPDATA%\Programs\Indognito)
 #   $env:GITHUB_TOKEN  = "…"       needed while the repository is private (or sign in with `gh auth login`)
 

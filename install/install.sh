@@ -9,7 +9,7 @@
 # on the first start.
 #
 # Options (environment variables):
-#   GNITO_VERSION=1.0.0      a specific version (default: the latest release)
+#   GNITO_VERSION=0.1.0      a specific version (default: the latest release)
 #   GNITO_BIN_DIR=/path      where to put `gnito` (default: /usr/local/bin as root, else ~/.local/bin)
 #   GNITO_NO_DEPS=1          don't install system packages
 #   GITHUB_TOKEN=…           needed while the repository is private (or be signed in with `gh auth login`)
