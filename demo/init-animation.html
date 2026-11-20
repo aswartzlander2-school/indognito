@@ -22,7 +22,7 @@
 
   /* full-bleed 25x25 grid background */
   .init-grid { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
-  .init-grid rect { rx: .18; fill: var(--grey); transition: fill .45s cubic-bezier(.2,.8,.2,1); }
+  .init-grid rect { fill: var(--grey); transition: fill .45s cubic-bezier(.2,.8,.2,1); }
   .init-grid rect.s { fill: var(--yellow); animation: flash 1.1s steps(2, jump-none) infinite; } /* about to start */
   .init-grid rect.p { fill: var(--yellow); animation: none; }                                     /* started */
   .init-grid rect.d { fill: var(--green); animation: none; }                                      /* finished */
@@ -69,6 +69,8 @@
     r.setAttribute('y', Math.floor(i / cols) + 0.08);
     r.setAttribute('width', 0.84);
     r.setAttribute('height', 0.84);
+    r.setAttribute('rx', 0.16); // attribute, not CSS — Firefox ignores CSS rx on <rect>
+    r.setAttribute('ry', 0.16);
     r.style.animationDelay = (Math.random() * 1.1).toFixed(2) + 's';
     svg.appendChild(r);
     rects.push(r);

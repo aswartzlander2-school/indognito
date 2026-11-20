@@ -30,6 +30,7 @@ export function showInit(mount, status) {
     const r = document.createElementNS(ns, 'rect');
     r.setAttribute('x', (i % cols) + 0.08); r.setAttribute('y', Math.floor(i / cols) + 0.08);
     r.setAttribute('width', 0.84); r.setAttribute('height', 0.84);
+    r.setAttribute('rx', 0.16); r.setAttribute('ry', 0.16); // attribute, not CSS — Firefox ignores CSS rx on <rect>
     r.style.animationDelay = `${(Math.random() * 1.1).toFixed(2)}s`;
     svg.append(r); rects.push(r);                 // no class = grey/black default
   }
