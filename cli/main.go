@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -98,6 +99,8 @@ func main() {
 		code = cmdWizardAPI(args)
 	case "__serve":
 		code = cmdServe()
+	case "__bundle": // release builds: gnito __bundle <repo-root> <out.tar.gz>
+		code = cmdBundle(args)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %q. Run \"gnito help\".\n", cmd)
 		code = 2
@@ -135,4 +138,22 @@ func releaseURL() string {
 		u = ReleaseURL
 	}
 	return strings.TrimRight(strings.ReplaceAll(u, "{version}", Version), "/")
+}
+
+func cmdBundle(args []string) int {
+	if len(args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: gnito __bundle <repo-root> <out.tar.gz>")
+		return 2
+	}
+	sum, err := bundleSource(args[0], args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := os.WriteFile(args[1]+".sha256", []byte(sum+"  "+filepath.Base(args[1])+"\n"), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Println(sum)
+	return 0
 }

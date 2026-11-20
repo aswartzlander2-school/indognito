@@ -19,7 +19,7 @@ type Install struct {
 	AppDir      string    `json:"appDir"`
 	Backend     int       `json:"backendPort"`
 	Frontend    int       `json:"frontendPort"`
-	Service     string    `json:"service"` // "systemd" | "none"
+	Service     string    `json:"service"` // "systemd" | "openrc" | "runit" | "launchd" | "none"
 	InstalledAt time.Time `json:"installedAt"`
 }
 

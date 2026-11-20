@@ -48,14 +48,9 @@ func startServer(in *Install) error {
 	if ok, _ := healthy(in.Frontend); ok {
 		return nil
 	}
-	if in.Service == "systemd" {
-		cmd := exec.Command("systemctl", "start", "indognito.service")
-		if !isElevated() {
-			cmd = exec.Command(elevator(), "systemctl", "start", "indognito.service")
-		}
-		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("systemctl start failed: %w", err)
+	if serviceCmd(in.Service, "start") != nil {
+		if err := runService(in.Service, "start"); err != nil {
+			return err
 		}
 	} else {
 		self, _ := os.Executable()
@@ -91,13 +86,8 @@ func elevator() string {
 }
 
 func stopServer(in *Install) {
-	if in.Service == "systemd" {
-		cmd := exec.Command("systemctl", "stop", "indognito.service")
-		if !isElevated() {
-			cmd = exec.Command(elevator(), "systemctl", "stop", "indognito.service")
-		}
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		_ = cmd.Run()
+	if serviceCmd(in.Service, "stop") != nil {
+		_ = runService(in.Service, "stop")
 		return
 	}
 	pid := readPid(in)
@@ -263,8 +253,8 @@ func cmdUninstall(args []string) int {
 		return 1
 	}
 	stopServer(in)
-	if in.Service == "systemd" {
-		script := "systemctl disable --now indognito.service; rm -f /etc/systemd/system/indognito.service; systemctl daemon-reload; rm -rf '" + in.InstallDir + "'"
+	if serviceCmd(in.Service, "stop") != nil {
+		script := removeServiceScript(in.Service) + "rm -rf '" + in.InstallDir + "'"
 		if !keep {
 			script += "; rm -rf '" + in.DataDir + "'"
 		}

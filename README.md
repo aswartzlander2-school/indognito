@@ -23,33 +23,83 @@ and run through a single CLI, `gnito`.
 
 ## Install
 
-Installation first downloads only the `gnito` CLI. Running `gnito start` then opens a graphical
-setup wizard that checks compatibility, lets you choose ports and resource allocations, downloads
-the Node.js runtime and the Indognito application, and starts it.
+Installation downloads only the `gnito` CLI. Running `gnito start` then opens a setup wizard that
+checks compatibility, lets you choose ports and resource allocations, downloads the Node.js runtime
+and the Indognito application, and starts it.
+
+The first command on each OS is optional — it installs the graphical wizard toolkit and (on Linux)
+the terminal sandbox. Without them, setup falls back to the text wizard (`gnito start --tui`) and
+terminals run unsandboxed.
+
+### Ubuntu / Debian
 
 ```sh
-curl -fsSL https://indognito.example/install.sh | sh    # see note below
+sudo apt update && sudo apt install -y python3-gi gir1.2-gtk-3.0 bubblewrap   # optional: GUI wizard + sandbox
+curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
 gnito start
 ```
 
-> The hosted install script / release artifacts are not published here yet; see
-> **[Build from source](#build-from-source)** to run it today. The command names and flow above are
-> what the installer provides.
+### Fedora
 
-### Per-OS notes
+```sh
+sudo dnf install -y python3-gobject gtk3 bubblewrap                            # optional: GUI wizard + sandbox
+curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+gnito start
+```
 
-| OS | Status | Notes |
-|---|---|---|
-| **Debian / Ubuntu** | Tested (arm64) | Setup wizard uses GTK via `python3-gi`, else Tk (`python3-tk`). Sandboxed terminals need `bubblewrap`. |
-| **Fedora** | Supported, not yet tested | Same as above (`python3-gobject` / `python3-tkinter`). |
-| **Arch Linux** | Supported, not yet tested | `python-gobject` / `tk`, `bubblewrap`. |
-| **Other Linux** | Best effort | The wizard falls back to a text mode (`gnito start --tui`). |
-| **macOS** | Supported, not yet tested | Native Tk wizard; terminals run unsandboxed as your user. |
-| **Windows** | Supported, not yet tested | WinForms wizard; terminals use ConPTY (Windows 10 1809+). |
+### Arch Linux
 
-Only Debian/Ubuntu on arm64 has been run end-to-end so far. Other targets are implemented and
-cross-compile cleanly, but are not yet verified — they are listed as *supported, not yet tested*
-on purpose.
+```sh
+sudo pacman -S --needed python-gobject gtk3 bubblewrap                         # optional: GUI wizard + sandbox
+curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+gnito start
+```
+
+### Other Linux
+
+```sh
+# Install python3 + GTK3 bindings (or Tk) and bubblewrap with your package manager for the
+# graphical wizard and sandboxed terminals; otherwise the text wizard is used.
+curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+gnito start
+```
+
+### macOS
+
+```sh
+# Tk ships with the system Python (used for the wizard). If needed: brew install python-tk
+curl -fsSL https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.sh | sh
+gnito start
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/aswartzlander2-school/indognito/main/install.ps1 | iex
+gnito start
+```
+
+The installer places `gnito` on your PATH (`/usr/local/bin`, else `~/.local/bin`; on Windows
+`%LOCALAPPDATA%\Indognito\bin`). Open a new terminal after installing so the PATH change takes
+effect.
+
+> **Availability.** The one-line installers pull the `gnito` binary from this repository's GitHub
+> releases. They work once the release artifacts are published (and, for a private repo, when you
+> have access). To run it today without releases, use **[Build from source](#build-from-source)**.
+
+### Tested status
+
+| OS | Status | Wizard | Terminal sandbox |
+|---|---|---|---|
+| **Debian / Ubuntu** | Tested (arm64) | GTK (`python3-gi`), else Tk | `bubblewrap` |
+| **Fedora** | Builds, not yet tested | GTK / Tk | `bubblewrap` |
+| **Arch Linux** | Builds, not yet tested | GTK / Tk | `bubblewrap` |
+| **Other Linux** | Best effort | GTK / Tk / text | `bubblewrap` if present |
+| **macOS** | Builds, not yet tested | Native Tk | none (runs as your user) |
+| **Windows** | Builds, not yet tested | WinForms | ConPTY (Win10 1809+) |
+
+Only Debian/Ubuntu on arm64 has been run end-to-end so far. The other targets cross-compile cleanly
+but are not yet verified — listed honestly as *builds, not yet tested*.
 
 ---
 

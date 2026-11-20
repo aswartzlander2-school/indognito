@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -102,52 +101,58 @@ func (in *installer) run() error {
 	defer os.RemoveAll(stage)
 	in.installed("Directories")
 
-	// 1. Node.js runtime from nodejs.org, verified against SHASUMS256.txt
+	// 1. Node.js runtime: an official or unofficial-builds download verified against SHASUMS256.txt,
+	//    or the system's own Node.js where no build exists (see noderuntime.go)
 	in.step(6, "Finding the Node.js runtime")
-	nodeVer, err := latestNode22()
+	np, err := resolveNode()
 	if err != nil {
-		return fmt.Errorf("could not reach nodejs.org: %w", err)
+		return err
 	}
-	nodeDir := filepath.Join(p.InstallDir, "runtime", "node-"+nodeVer)
-	nodeBin := filepath.Join(nodeDir, "bin", "node")
-	if runtime.GOOS == "windows" {
-		nodeBin = filepath.Join(nodeDir, "node.exe")
-	}
-	if _, err := os.Stat(nodeBin); err != nil {
-		name, ext := nodeArchive(nodeVer)
-		url := fmt.Sprintf("https://nodejs.org/dist/%s/%s%s", nodeVer, name, ext)
-		sums, err := httpGetString(fmt.Sprintf("https://nodejs.org/dist/%s/SHASUMS256.txt", nodeVer))
-		if err != nil {
-			return err
+	var nodeBin, nodeLabel string
+	if np.System != "" {
+		nodeBin, nodeLabel = np.System, "system Node.js ("+np.System+")"
+	} else {
+		nodeDir := filepath.Join(p.InstallDir, "runtime", "node-"+np.Version)
+		nodeBin = filepath.Join(nodeDir, "bin", "node")
+		if runtime.GOOS == "windows" {
+			nodeBin = filepath.Join(nodeDir, "node.exe")
 		}
-		want := ""
-		for _, line := range strings.Split(sums, "\n") {
-			if f := strings.Fields(line); len(f) == 2 && f[1] == name+ext {
-				want = f[0]
+		nodeLabel = "Node.js " + np.Version + " runtime"
+		if _, err := os.Stat(nodeBin); err != nil {
+			url := fmt.Sprintf("%s/%s/%s%s", np.Base, np.Version, np.File, np.Ext)
+			sums, err := httpGetString(fmt.Sprintf("%s/%s/SHASUMS256.txt", np.Base, np.Version))
+			if err != nil {
+				return err
+			}
+			want := ""
+			for _, line := range strings.Split(sums, "\n") {
+				if f := strings.Fields(line); len(f) == 2 && f[1] == np.File+np.Ext {
+					want = f[0]
+				}
+			}
+			if want == "" {
+				return fmt.Errorf("no checksum for %s%s at %s", np.File, np.Ext, np.Base)
+			}
+			archive := filepath.Join(stage, np.File+np.Ext)
+			in.step(8, "Downloading Node.js "+np.Version)
+			if err := in.download(url, archive, want, 8, 42); err != nil {
+				return err
+			}
+			in.step(42, "Extracting Node.js")
+			tmp := filepath.Join(stage, "node")
+			if err := in.extract(archive, tmp, 1); err != nil {
+				return err
+			}
+			_ = os.RemoveAll(nodeDir)
+			if err := os.MkdirAll(filepath.Dir(nodeDir), 0o755); err != nil {
+				return err
+			}
+			if err := os.Rename(tmp, nodeDir); err != nil {
+				return err
 			}
 		}
-		if want == "" {
-			return fmt.Errorf("no Node.js %s build for %s/%s", nodeVer, runtime.GOOS, runtime.GOARCH)
-		}
-		archive := filepath.Join(stage, name+ext)
-		in.step(8, "Downloading Node.js "+nodeVer)
-		if err := in.download(url, archive, want, 8, 42); err != nil {
-			return err
-		}
-		in.step(42, "Extracting Node.js")
-		tmp := filepath.Join(stage, "node")
-		if err := in.extract(archive, tmp, 1); err != nil {
-			return err
-		}
-		_ = os.RemoveAll(nodeDir)
-		if err := os.MkdirAll(filepath.Dir(nodeDir), 0o755); err != nil {
-			return err
-		}
-		if err := os.Rename(tmp, nodeDir); err != nil {
-			return err
-		}
 	}
-	in.installed("Node.js " + nodeVer + " runtime")
+	in.installed(nodeLabel)
 
 	// 2. Indognito application bundle
 	bundle := filepath.Join(stage, "app.tar.gz")
@@ -160,6 +165,12 @@ func (in *installer) run() error {
 			if err := verifySha(bundle, strings.Fields(string(sum))[0]); err != nil {
 				return err
 			}
+		}
+	} else if root := sourceRoot(); root != "" && os.Getenv("GNITO_FROM_RELEASE") == "" {
+		// gnito built inside a source checkout: install that code, no download needed
+		in.step(50, "Packing Indognito from the source checkout ("+root+")")
+		if _, err := bundleSource(root, bundle); err != nil {
+			return fmt.Errorf("could not pack the source checkout: %w", err)
 		}
 	} else {
 		base := releaseURL()
@@ -210,23 +221,26 @@ func (in *installer) run() error {
 	}
 	in.installed("Configuration (" + cfgFile + ")")
 
-	// 5. Privileged ports and system service (administrator installs)
+	// 5. Privileged ports and system service (administrator installs, any init system — see services.go)
 	service := "none"
-	if p.Mode == "admin" && runtime.GOOS == "linux" {
-		if p.Backend < 1024 || p.Frontend < 1024 {
+	if p.Mode == "admin" && runtime.GOOS != "windows" {
+		if runtime.GOOS == "linux" && (p.Backend < 1024 || p.Frontend < 1024) && !strings.HasPrefix(nodeBin, "/usr/") {
 			in.step(91, "Allowing Node.js to use privileged ports")
 			if out, err := exec.Command("setcap", "cap_net_bind_service=+ep", nodeBin).CombinedOutput(); err != nil {
 				return fmt.Errorf("setcap failed (%v): %s", err, out)
 			}
 			in.installed("Privileged-port capability")
 		}
-		if _, err := exec.LookPath("systemctl"); err == nil && isElevated() {
-			in.step(93, "Creating the system service")
-			if err := writeSystemdUnit(p, nodeBin, appDir, cfgFile); err != nil {
-				return err
-			}
-			service = "systemd"
-			in.installed("systemd service indognito.service")
+		in.step(93, "Creating the system service")
+		logPath := filepath.Join(p.DataDir, "logs", "indognito.log")
+		_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
+		kind, err := installService(p, nodeBin, appDir, cfgFile, logPath)
+		if err != nil {
+			return fmt.Errorf("could not create the %s service: %w", kind, err)
+		}
+		service = kind
+		if kind != "none" {
+			in.installed(kind + " service (indognito)")
 		}
 	}
 	if p.Mode == "admin" && runtime.GOOS != "windows" && p.OwnerUID > 0 {
@@ -334,49 +348,13 @@ func httpGetString(url string) (string, error) {
 		b, err := os.ReadFile(strings.TrimPrefix(url, "file://"))
 		return string(b), err
 	}
-	resp, err := httpClient().Get(url)
+	resp, err := openURL(url)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("%s: HTTP %d", url, resp.StatusCode)
-	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	return string(b), err
-}
-
-func latestNode22() (string, error) {
-	if v := os.Getenv("GNITO_NODE_VERSION"); v != "" {
-		return v, nil
-	}
-	s, err := httpGetString("https://nodejs.org/dist/index.json")
-	if err != nil {
-		return "", err
-	}
-	var rel []struct {
-		Version string `json:"version"`
-		LTS     any    `json:"lts"`
-	}
-	if err := json.Unmarshal([]byte(s), &rel); err != nil {
-		return "", err
-	}
-	for _, r := range rel {
-		if strings.HasPrefix(r.Version, "v22.") && r.LTS != false {
-			return r.Version, nil
-		}
-	}
-	return "", errors.New("no Node.js 22 LTS release found")
-}
-
-func nodeArchive(ver string) (name, ext string) {
-	arch := map[string]string{"amd64": "x64", "arm64": "arm64"}[runtime.GOARCH]
-	osn := map[string]string{"linux": "linux", "darwin": "darwin", "windows": "win"}[runtime.GOOS]
-	ext = ".tar.gz"
-	if runtime.GOOS == "windows" {
-		ext = ".zip"
-	}
-	return fmt.Sprintf("node-%s-%s-%s", ver, osn, arch), ext
 }
 
 func (in *installer) download(url, dest, wantSha string, from, to int) error {
@@ -386,14 +364,11 @@ func (in *installer) download(url, dest, wantSha string, from, to int) error {
 		}
 		return verifySha(dest, wantSha)
 	}
-	resp, err := httpClient().Get(url)
+	resp, err := openURL(url)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("download failed: %s returned HTTP %d", url, resp.StatusCode)
-	}
 	f, err := os.Create(dest)
 	if err != nil {
 		return err
