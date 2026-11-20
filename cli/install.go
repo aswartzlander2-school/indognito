@@ -282,7 +282,7 @@ func writeConfig(path string, p Plan) error {
 	}
 	bind := p.FrontendBind
 	if bind == "" {
-		bind = "127.0.0.1"
+		bind = "::"
 	}
 	cfg["version"] = Version
 	cfg["hostname"] = "gnito"
@@ -634,8 +634,8 @@ func updateApp(inst *Install, version string) error {
 	if b, e := os.ReadFile(inst.ConfigFile); e == nil {
 		var c map[string]any
 		if json.Unmarshal(b, &c) == nil {
-			if bind, ok := c["bind"].(map[string]any); ok && bind["frontend"] == "0.0.0.0" {
-				bind["frontend"] = "127.0.0.1"
+			if bind, ok := c["bind"].(map[string]any); ok && (bind["frontend"] == "0.0.0.0" || bind["frontend"] == "127.0.0.1") {
+				bind["frontend"] = "::"
 				if nb, e2 := json.MarshalIndent(c, "", "  "); e2 == nil {
 					_ = os.WriteFile(inst.ConfigFile, nb, 0o600)
 				}

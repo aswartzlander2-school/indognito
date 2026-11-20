@@ -137,8 +137,14 @@ server.on('upgrade', (req, socket, head) => {
   if (p.startsWith('/wisp/') || p.startsWith('/ws/')) return proxyUpgrade(req, socket, head);
   socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
 });
-server.listen(cfg.ports.frontend, cfg.bind.frontend, () => {
-  console.log(`[gnito] frontend v${VERSION} on ${tlsOn ? 'https' : 'http'}://${cfg.bind.frontend}:${cfg.ports.frontend} → backend 127.0.0.1:${cfg.ports.backend}`);
+// Bind "::" as dual-stack (ipv6Only:false) so BOTH IPv4 and IPv6 work — important on Windows,
+// where `localhost` resolves to ::1 first, so an IPv4-only bind (127.0.0.1) refuses the connection.
+const fHost = cfg.bind.frontend;
+const listenOpts = fHost === '::' || fHost === '0.0.0.0'
+  ? { port: cfg.ports.frontend, host: '::', ipv6Only: false }
+  : { port: cfg.ports.frontend, host: fHost };
+server.listen(listenOpts, () => {
+  console.log(`[gnito] frontend v${VERSION} on ${tlsOn ? 'https' : 'http'}://${fHost === '::' ? 'localhost' : fHost}:${cfg.ports.frontend} → backend 127.0.0.1:${cfg.ports.backend}`);
 });
 server.on('error', (e) => { console.error('[gnito] frontend error:', e.message); process.exit(1); });
 // Shut down cleanly on a real stop signal (the supervisor sends SIGTERM); ignore stray console
