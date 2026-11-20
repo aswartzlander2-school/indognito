@@ -299,8 +299,10 @@ body::before {
     radial-gradient(52vw 46vh at 105% 108%, rgba(255, 138, 42, .12), transparent 60%),
     radial-gradient(40vw 40vh at 85% 0%, rgba(124, 108, 255, .07), transparent 60%);
 }
-.shell, .admin, .files, .browser, .term-wrap { position: relative; z-index: 1; }
-.screen { z-index: 1; } /* keep fixed positioning from the base rule so cards stay centered */
+.admin, .files, .browser, .term-wrap { position: relative; z-index: 1; }
+/* .shell and .screen keep their base position (fixed, full-height); only add z-index so they
+   sit above the ambient body glow — forcing position:relative here collapses their layout. */
+.shell, .screen { z-index: 1; }
 
 /* top-level panels get the real blur */
 .card, .ws-card, .kpi, .center-card, .modal, .glass-card, .dtable, .side-panel, .menu, .toast,

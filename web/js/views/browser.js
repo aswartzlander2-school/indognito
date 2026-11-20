@@ -73,7 +73,8 @@ function setupEngineOnce() {
     // crashes on `config.prefix` the first time it proxies a request. Re-push the config now that the
     // SW is definitely controlling, so it is populated regardless of first-load ordering.
     await scramjet.modifyConfig({});
-    const conn = new BareMux.BareMuxConnection(BASE + 'vendor/baremux/worker.js');
+    const v = encodeURIComponent(state.version || '1');
+    const conn = new BareMux.BareMuxConnection(`${BASE}vendor/baremux/worker.js?v=${v}`);
     return { scramjet, conn };
   })().catch((e) => { enginePromise = null; throw e; }); // let a failed setup be retried
   return enginePromise;
@@ -83,7 +84,7 @@ async function startEngine(ticket) {
   const { scramjet, conn } = await setupEngineOnce();
   const wisp = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}wisp/${ticket}/`;
   // Epoxy performs TLS to each website inside the page, so the relay only ever sees encrypted bytes for https sites.
-  await conn.setTransport(BASE + 'vendor/epoxy/index.mjs', [{ wisp }]);
+  await conn.setTransport(`${BASE}vendor/epoxy/index.mjs?v=${encodeURIComponent(state.version || '1')}`, [{ wisp }]);
   return { scramjet, conn, ticket };
 }
 
