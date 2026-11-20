@@ -21,7 +21,7 @@ const DEFAULTS = {
   // runtime.driver: 'auto' prefers an isolated microVM (if microvm.url is set), then the bubblewrap
   // sandbox, then a plain process. microvm needs a MicroVM-Playground server with a QEMU backend and
   // SSH enabled in the guest image; guestUser/guestPassword are that image's login (for file access).
-  runtime: { driver: 'auto', microvm: { url: '', password: '', guestUser: 'gnito', guestPassword: '', image: 'default', memMib: 1024, vcpus: 1, diskGb: 8, ttl: 'never' } },
+  runtime: { driver: 'auto', microvm: { url: '', user: 'admin', password: '', guestUser: 'gnito', guestPassword: '', image: 'default', memMib: 1024, vcpus: 1, diskGb: 8, ttl: 'never' } },
   tls: { mode: 'off', cert: '', key: '' },
   publicUrl: '',
 };

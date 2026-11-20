@@ -33,9 +33,9 @@ export class Machines {
   async headers() {
     const h = { 'content-type': 'application/json' };
     if (this.cfg.password) {
-      // MicroVM-Playground uses a single shared password + a session cookie.
+      // MicroVM-Playground signs in with a username + password and returns a session cookie.
       if (!this.cookie || Date.now() - this.loginAt > 50 * 60_000) {
-        const r = await fetch(this.base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: this.cfg.password }) });
+        const r = await fetch(this.base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: this.cfg.user || 'admin', password: this.cfg.password }) });
         if (!r.ok) throw new Error(`MicroVM server login failed (${r.status})`);
         this.cookie = (r.headers.get('set-cookie') || '').split(';')[0];
         this.loginAt = Date.now();
