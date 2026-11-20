@@ -75,9 +75,9 @@ func runChecks() []Check {
 	add(Check{ID: "cpu", Label: "64-bit processor", OK: is64, Fatal: true,
 		Detail: fmt.Sprintf("%s, %d core(s)", runtime.GOARCH, r.CPUCores)})
 
-	ramOK := r.RAMAvailMB >= minRAMMB
-	add(Check{ID: "ram", Label: "Available RAM (4 GB minimum)", OK: ramOK || relaxed(), Fatal: true,
-		Detail: fmt.Sprintf("%.1f GB available of %.1f GB", float64(r.RAMAvailMB)/1024, float64(r.RAMTotalMB)/1024) + relaxNote(ramOK)})
+	ramOK := r.RAMTotalMB >= minRAMMB
+	add(Check{ID: "ram", Label: "Total RAM (4 GB minimum)", OK: ramOK || relaxed(), Fatal: true,
+		Detail: fmt.Sprintf("%.1f GB installed (%.1f GB available now)", float64(r.RAMTotalMB)/1024, float64(r.RAMAvailMB)/1024) + relaxNote(ramOK)})
 
 	diskOK := r.StorageAvailMB >= minStorageMB
 	add(Check{ID: "storage", Label: "Available storage (24 GB minimum)", OK: diskOK || relaxed(), Fatal: true,
