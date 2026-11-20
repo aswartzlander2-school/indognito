@@ -20,7 +20,7 @@ export async function showTerminal(mount, arg) {
     if (s.ws?.readyState === 1) s.ws.send(JSON.stringify({ type: 'resize', cols: s.term.cols, rows: s.term.rows }));
   }
 
-  function allocating(el, text = 'Allocating Runtime...') {
+  function allocating(el, text = 'Allocating runtime…') {
     el.querySelector('.alloc')?.remove();
     el.append(h('div', { class: 'alloc', role: 'status' }, h('div', { style: { textAlign: 'center' } }, h('div', { class: 'dots' }, h('i'), h('i'), h('i')), h('h1', {}, text))));
   }
@@ -55,6 +55,7 @@ export async function showTerminal(mount, arg) {
         const m = JSON.parse(e.data);
         if (m.type === 'status') {
           s.info = m.session;
+          if (m.session.status === 'allocating') allocating(s.el, m.session.phase || 'Allocating runtime…'); // update the centered status text
           if (m.session.status === 'running') { s.el.querySelector('.alloc')?.remove(); if (active === s.info.id) { fitActive(); s.term.focus(); } }
           if (m.session.status === 'exited') s.term.write(`\r\n\x1b[2m── ${m.session.exitReason || 'Session ended.'} ──\x1b[0m\r\n`);
           renderTabs(); renderStatus();
@@ -99,7 +100,7 @@ export async function showTerminal(mount, arg) {
   let stats = null;
   function renderStatus() {
     const s = sessions.get(active);
-    const drv = { sandbox: 'Sandboxed (bubblewrap)', process: 'Unsandboxed process', microvm: 'MicroVM' };
+    const drv = { sandbox: 'Sandboxed (bubblewrap)', process: 'Unsandboxed process', microvm: 'Isolated Linux microVM' };
     status.replaceChildren(
       h('span', {}, h('b', {}, 'Runtime: '), s ? `${drv[s.info.driver] || s.info.driver} · ${s.info.status}` : '—'),
       h('span', {}, h('b', {}, 'Working folder: '), h('span', { class: 'mono' }, s?.info.driver === 'sandbox' ? '/home/gnito' : '~ (your workspace)')),

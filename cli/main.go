@@ -19,8 +19,8 @@ import (
 	"strings"
 )
 
-// Version is set at build time: -ldflags "-X main.Version=0.1.10"
-var Version = "0.1.10"
+// Version is set at build time: -ldflags "-X main.Version=0.1.11"
+var Version = "0.1.11"
 
 // ReleaseURL is where app bundles are downloaded from; override with GNITO_RELEASE_URL.
 var ReleaseURL = "https://github.com/aswartzlander2-school/indognito/releases/download/v{version}"

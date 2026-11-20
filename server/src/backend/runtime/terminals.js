@@ -18,10 +18,14 @@ export class Terminals extends EventEmitter {
 
   allowedFor(user) {
     const p = this.probe();
-    if (!p.pty && p.selected !== 'microvm') return { ok: false, reason: 'The PTY helper is missing from this installation.' };
+    if (p.selected === 'microvm') {
+      if (!this.machines?.enabled) return { ok: false, reason: 'Terminals run in an isolated Linux microVM. The Owner needs to connect a MicroVM-Playground server first (set runtime.microvm.url in the server config).' };
+      return { ok: true };
+    }
+    // Explicit sandbox/process override (advanced; not isolated like the microVM).
+    if (!p.pty) return { ok: false, reason: 'The PTY helper is missing from this installation.' };
     if (p.selected === 'process' && !user.is_owner && !this.settings.get('runtime.allowUnsandboxed', false)) {
-      return { ok: false, reason: 'Terminals for other accounts need sandboxing, which is not available on this host ' +
-        `(${p.sandboxReason || 'no sandbox'}). The Owner can allow unsandboxed terminals in Admin → System.` };
+      return { ok: false, reason: 'Terminals for other accounts need sandboxing or a microVM. The Owner can connect a MicroVM-Playground server, or allow unsandboxed terminals in Admin → System.' };
     }
     return { ok: true };
   }
@@ -35,7 +39,7 @@ export class Terminals extends EventEmitter {
     if (!allowed.ok) { const e = new Error(allowed.reason); e.status = 403; throw e; }
     const id = crypto.randomBytes(9).toString('base64url');
     const s = {
-      id, userId: user.id, username: user.username, status: 'allocating', driver: this.probe().selected,
+      id, userId: user.id, username: user.username, status: 'allocating', phase: 'Allocating runtime…', driver: this.probe().selected,
       created: Date.now(), cols, rows, buf: [], bufLen: 0, clients: new Set(), rt: null, exitReason: null,
       title: `Session ${mine.length + 1}`,
       pids: () => s.rt?.pids || [],
@@ -50,8 +54,12 @@ export class Terminals extends EventEmitter {
     const p = this.probe();
     const network = this.settings.get('runtime.terminalNetwork', true);
     if (s.driver === 'microvm') {
-      // Attach to the user's persistent, isolated microVM (same VM backs the File Explorer and
-      // Browser). The VM has its own disk and never mounts host/user files.
+      // Attach to the user's persistent, isolated Linux microVM (same VM backs the File Explorer
+      // and Browser). The VM has its own disk and never mounts host/user files. Report progress so
+      // the terminal can show "Allocating runtime…" then "Connecting…" while it comes up.
+      this.setPhase(s, 'Allocating runtime…');
+      await this.machines.ensure(user, limits);
+      this.setPhase(s, 'Connecting…');
       s.rt = await this.machines.console(user, limits, { cols: s.cols, rows: s.rows });
     } else {
       const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, probe: p });
@@ -84,6 +92,8 @@ export class Terminals extends EventEmitter {
   }
 
   broadcast(s, msg) { const t = JSON.stringify(msg); for (const c of s.clients) if (c.readyState === 1) c.send(t); }
+
+  setPhase(s, phase) { if (s.status !== 'allocating') return; s.phase = phase; this.broadcast(s, { type: 'status', session: view(s) }); }
 
   attach(s, ws) {
     s.clients.add(ws);
@@ -121,6 +131,6 @@ export class Terminals extends EventEmitter {
 }
 
 function view(s) {
-  return { id: s.id, userId: s.userId, title: s.title, status: s.status, driver: s.driver, created: s.created,
+  return { id: s.id, userId: s.userId, title: s.title, status: s.status, phase: s.phase, driver: s.driver, created: s.created,
     startedAt: s.startedAt, ended: s.ended, exitReason: s.exitReason, cols: s.cols, rows: s.rows };
 }

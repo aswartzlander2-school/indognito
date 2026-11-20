@@ -57,7 +57,7 @@ export async function showHome(mount) {
       st(stats.storage, 'Storage', fmtBytes(s.storage.used), `of ${fmtBytes(s.storage.max)}`, meter(s.storage.used, s.storage.max));
       st(stats.ram, 'RAM', s.ram.measured ? fmtBytes(s.ram.used) : 'n/a', `of ${fmtBytes(s.ram.max)}`, meter(s.ram.used, s.ram.max));
       st(stats.cpu, 'CPU', s.cpu.measured ? `${s.cpu.percent}%` : 'n/a', `limit ${s.cpu.max}%`, meter(s.cpu.percent, s.cpu.max));
-      const drv = { sandbox: 'sandboxed (bubblewrap)', process: 'unsandboxed process', microvm: 'microVM' }[s.runtime.driver] || s.runtime.driver;
+      const drv = { sandbox: 'sandboxed (bubblewrap)', process: 'unsandboxed process', microvm: 'isolated Linux microVM' }[s.runtime.driver] || s.runtime.driver;
       runtimeNote.textContent = `Runtime: ${drv} · limits: ${s.runtime.limits === 'cgroup' ? 'enforced by the kernel' : 'enforced by monitoring'} · ` +
         `${s.terminals.open}/${s.terminals.max} terminals · ${s.browser.open}/${s.browser.max} browser sessions. RAM and CPU are measured from your running terminal processes.`;
     } catch (e) { if (e.status !== 401) runtimeNote.textContent = e.message; }

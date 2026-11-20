@@ -66,9 +66,9 @@ export function detectDrivers(cfg) {
     if (r.status === 0) out.limits = 'cgroup';
   }
   const want = cfg.runtime?.driver || 'auto';
-  // Prefer a fully-isolated microVM when a MicroVM-Playground server is configured, then the
-  // bubblewrap sandbox, then a plain process.
-  out.selected = want === 'auto' ? (out.microvm ? 'microvm' : out.sandbox ? 'sandbox' : 'process') : want;
+  // Terminals always run in an isolated Linux microVM (MicroVM-Playground), regardless of the host
+  // OS — never a host shell. The sandbox/process drivers exist only as an explicit opt-in override.
+  out.selected = want === 'auto' ? 'microvm' : want;
   if (out.selected === 'sandbox' && !out.sandbox) out.selected = 'process';
   if (out.selected === 'microvm' && !out.microvm) out.selected = out.sandbox ? 'sandbox' : 'process';
   probe = out;
