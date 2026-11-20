@@ -24,8 +24,10 @@ function run(name, file) {
 run('backend', 'backend/index.js');
 setTimeout(() => run('frontend', 'frontend/index.js'), 300);
 
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {
+process.on('SIGTERM', () => {
   stopping = true;
   for (const c of children.values()) c.kill('SIGTERM');
   setTimeout(() => process.exit(0), 3000).unref();
 });
+// A detached background supervisor should not tear down on stray console control events.
+for (const sig of ['SIGINT', 'SIGHUP', 'SIGBREAK']) { try { process.on(sig, () => {}); } catch { /* not supported */ } }

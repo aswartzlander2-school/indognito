@@ -119,7 +119,9 @@ server.listen(cfg.ports.backend, cfg.bind.backend, () => {
   console.log(`[gnito] backend v${VERSION} listening on http://${cfg.bind.backend}:${cfg.ports.backend} (driver: ${terminals.probe().selected})`);
 });
 
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {
+process.on('SIGTERM', () => {
   for (const s of terminals.list()) terminals.terminate(s.id, 'Server shutting down.');
   setTimeout(() => process.exit(0), 300);
 });
+// Ignore stray console control events so a Windows background service isn't killed spuriously.
+for (const sig of ['SIGINT', 'SIGHUP', 'SIGBREAK']) { try { process.on(sig, () => {}); } catch { /* not supported */ } }

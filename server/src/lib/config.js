@@ -16,7 +16,7 @@ const DEFAULTS = {
   hostname: 'gnito',
   permissionMode: 'user',
   ports: { backend: 7710, frontend: 7711 },
-  bind: { backend: '127.0.0.1', frontend: '0.0.0.0' },
+  bind: { backend: '127.0.0.1', frontend: '127.0.0.1' },
   allocation: { ramMb: 3072, storageMb: 8192, cpuCores: 1, cpuPercent: 100 },
   // runtime.driver: 'auto' prefers an isolated microVM (if microvm.url is set), then the bubblewrap
   // sandbox, then a plain process. microvm needs a MicroVM-Playground server with a QEMU backend and

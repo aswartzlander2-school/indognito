@@ -140,3 +140,8 @@ server.on('upgrade', (req, socket, head) => {
 server.listen(cfg.ports.frontend, cfg.bind.frontend, () => {
   console.log(`[gnito] frontend v${VERSION} on ${tlsOn ? 'https' : 'http'}://${cfg.bind.frontend}:${cfg.ports.frontend} → backend 127.0.0.1:${cfg.ports.backend}`);
 });
+server.on('error', (e) => { console.error('[gnito] frontend error:', e.message); process.exit(1); });
+// Shut down cleanly on a real stop signal (the supervisor sends SIGTERM); ignore stray console
+// control events (SIGINT/SIGHUP/SIGBREAK) so a Windows background service isn't killed spuriously.
+process.on('SIGTERM', () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 1500).unref(); });
+for (const sig of ['SIGINT', 'SIGHUP', 'SIGBREAK']) { try { process.on(sig, () => {}); } catch { /* not supported */ } }

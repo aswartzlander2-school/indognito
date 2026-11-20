@@ -282,7 +282,7 @@ func writeConfig(path string, p Plan) error {
 	}
 	bind := p.FrontendBind
 	if bind == "" {
-		bind = "0.0.0.0"
+		bind = "127.0.0.1"
 	}
 	cfg["version"] = Version
 	cfg["hostname"] = "gnito"
@@ -582,4 +582,65 @@ func currentOwner() (uid, gid int, name string) {
 		return uid, gid, u.Username
 	}
 	return 0, 0, ""
+}
+
+// updateApp downloads the app bundle for `version` and installs it over the existing appDir, then
+// reinstalls the PTY helper (this gnito binary) and migrates a legacy 0.0.0.0 frontend bind to
+// loopback. Used by "gnito update" so server/web fixes are delivered, not just the CLI binary.
+func updateApp(inst *Install, version string) error {
+	in := &installer{emit: func(Progress) {}}
+	stage, err := os.MkdirTemp("", "gnito-appupd-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	base := strings.TrimRight(strings.ReplaceAll(ReleaseURL, "{version}", version), "/")
+	if u := os.Getenv("GNITO_RELEASE_URL"); u != "" {
+		base = strings.TrimRight(strings.ReplaceAll(u, "{version}", version), "/")
+	}
+	name := fmt.Sprintf("indognito-app-%s.tar.gz", version)
+	bundle := filepath.Join(stage, name)
+	sum, err := httpGetString(base + "/" + name + ".sha256")
+	if err != nil {
+		return fmt.Errorf("could not fetch the app checksum: %w", err)
+	}
+	if err := in.download(base+"/"+name, bundle, strings.Fields(sum)[0], 0, 100); err != nil {
+		return err
+	}
+	newApp := filepath.Join(stage, "app")
+	if err := in.extract(bundle, newApp, 1); err != nil {
+		return err
+	}
+	_ = os.RemoveAll(inst.AppDir + ".old")
+	if _, err := os.Stat(inst.AppDir); err == nil {
+		if err := os.Rename(inst.AppDir, inst.AppDir+".old"); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(newApp, inst.AppDir); err != nil {
+		_ = os.Rename(inst.AppDir+".old", inst.AppDir)
+		return err
+	}
+	_ = os.RemoveAll(inst.AppDir + ".old")
+
+	// Reinstall the PTY helper = this freshly-updated gnito binary.
+	if self, e := os.Executable(); e == nil {
+		helper := filepath.Join(inst.AppDir, "bin", exeName("gnito"))
+		_ = os.MkdirAll(filepath.Dir(helper), 0o755)
+		_ = copyFile(self, helper, 0o755)
+	}
+
+	// Migrate a legacy public frontend bind to loopback (avoids the Windows firewall prompt / crash).
+	if b, e := os.ReadFile(inst.ConfigFile); e == nil {
+		var c map[string]any
+		if json.Unmarshal(b, &c) == nil {
+			if bind, ok := c["bind"].(map[string]any); ok && bind["frontend"] == "0.0.0.0" {
+				bind["frontend"] = "127.0.0.1"
+				if nb, e2 := json.MarshalIndent(c, "", "  "); e2 == nil {
+					_ = os.WriteFile(inst.ConfigFile, nb, 0o600)
+				}
+			}
+		}
+	}
+	return nil
 }

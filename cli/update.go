@@ -230,8 +230,29 @@ func cmdUpdate(args []string) int {
 		fmt.Printf("  The new binary is downloaded; move it yourself with:\n    sudo install -m 0755 %s %s\n", tmp, exe)
 		return 1
 	}
-	fmt.Printf("%s✓ Updated to %s.%s", green, latest, reset)
-	fmt.Printf(" Restart any running server with %sgnito restart%s.\n", bold, reset)
+	fmt.Printf("%s✓ Updated the CLI to %s.%s\n", green, latest, reset)
+
+	// If Indognito is installed, update the app (server + web) too and restart it, so server-side
+	// fixes are delivered — not only the CLI binary.
+	if inst, err := loadInstall(); err == nil {
+		fmt.Printf("%sUpdating the installed app…%s\n", dim, reset)
+		if err := updateApp(inst, latest); err != nil {
+			fmt.Printf("%s! The CLI updated, but the app update failed: %v%s\n", yellow, err, reset)
+			fmt.Printf("  Run %sgnito re-install%s to finish updating.\n", bold, reset)
+			return 1
+		}
+		inst.Version = latest
+		_ = saveInstall(stateFile(), inst)
+		fmt.Printf("%s✓ App updated. Restarting…%s\n", green, reset)
+		stopServer(inst)
+		if err := startServer(inst); err != nil {
+			fmt.Printf("%s! Updated, but the server did not restart: %v%s\n", yellow, err, reset)
+			return 1
+		}
+		fmt.Printf("%s✓ Indognito %s is running.%s\n", green, latest, reset)
+	} else {
+		fmt.Printf(" Install or re-install to set up the app.\n")
+	}
 	return 0
 }
 
