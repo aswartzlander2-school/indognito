@@ -70,11 +70,24 @@ Options:
 }
 
 func main() {
+	cmd := ""
+	if len(os.Args) >= 2 {
+		cmd = os.Args[1]
+	}
+
+	// Running inside an Indognito-spawned machine (terminal/workspace): there is nothing to install
+	// or manage from in here, so any user command just says so. Internal (__) subcommands still run.
+	if inIndognitoMachine() && !strings.HasPrefix(cmd, "__") {
+		printBanner()
+		fmt.Println(bold + "You are already in an Indognito machine!" + reset)
+		os.Exit(0)
+	}
+
 	if len(os.Args) < 2 {
 		usage()
 		return
 	}
-	cmd, args := os.Args[1], os.Args[2:]
+	args := os.Args[2:]
 
 	// Before user-facing commands, show an update banner (from the last cached check) and, if the
 	// cache is stale, refresh it in the background. Internal subcommands are skipped.
@@ -121,6 +134,13 @@ func main() {
 		code = 2
 	}
 	os.Exit(code)
+}
+
+// inIndognitoMachine reports whether gnito is running inside a terminal/workspace that Indognito
+// itself spawned. Indognito sets GNITO_MACHINE=1 in those shells. (The host that runs Indognito is
+// named "gnito" by default, so hostname can't be used — that would wrongly block gnito on the host.)
+func inIndognitoMachine() bool {
+	return os.Getenv("GNITO_MACHINE") == "1"
 }
 
 func cmdPty(args []string) int {

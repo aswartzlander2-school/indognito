@@ -39,6 +39,7 @@ function sandboxArgs(ws, opts) {
   a.push('--bind', ws, '/home/gnito', '--chdir', '/home/gnito');
   if (!opts.network) a.push('--unshare-net');
   a.push('--clearenv', '--setenv', 'HOME', '/home/gnito', '--setenv', 'USER', 'gnito', '--setenv', 'LOGNAME', 'gnito',
+    '--setenv', 'GNITO_MACHINE', '1', // marks this shell as being inside an Indognito machine
     '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin', '--setenv', 'TERM', 'xterm-256color',
     '--setenv', 'LANG', process.env.LANG || 'C.UTF-8', '--setenv', 'SHELL', '/bin/bash',
     '--setenv', 'PS1', '\\[\\e[1;31m\\]gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ');
@@ -90,7 +91,7 @@ export function spawnLocal(kind, { ws, cols, rows, limits, network, probe: p }) 
   } else {
     const sh = defaultShell();
     argv = [sh.cmd, ...sh.args];
-    env = { ...cleanEnv(), HOME: ws, USERPROFILE: ws, TERM: 'xterm-256color', GNITO_WORKSPACE: ws,
+    env = { ...cleanEnv(), HOME: ws, USERPROFILE: ws, TERM: 'xterm-256color', GNITO_WORKSPACE: ws, GNITO_MACHINE: '1',
       PS1: '\\[\\e[1;31m\\]gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ' };
   }
   if (p.limits === 'cgroup' && limits) {
