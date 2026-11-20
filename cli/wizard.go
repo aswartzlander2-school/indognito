@@ -155,7 +155,16 @@ func runWizard(existing *Install, tui bool) int {
 	}
 	if cmd == nil {
 		if !tui {
-			fmt.Printf("%sNo graphical desktop toolkit found (GTK via python3-gi, or Tk); using the text-mode wizard.%s\n\n", yellow, reset)
+			var why string
+			switch {
+			case !hasDisplay():
+				why = "No graphical display detected"
+			case runtime.GOOS == "linux":
+				why = "No desktop toolkit found (install python3-gi + GTK 3, or python3-tk)"
+			default:
+				why = "No desktop toolkit found"
+			}
+			fmt.Printf("%s%s; using the text-mode wizard.%s\n\n", yellow, why, reset)
 		}
 		return finishWizard(runTUI(existing), existing)
 	}

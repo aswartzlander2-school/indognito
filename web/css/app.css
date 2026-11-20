@@ -76,9 +76,9 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 16px; resize: ver
 
 /* ---------- init grid ---------- */
 .screen { position: fixed; inset: 0; display: grid; place-items: center; overflow: auto; }
-.init-screen { padding: 0; }
+.init-screen { padding: 0; background: #000; }
 .init-grid { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
-.init-grid rect { rx: .18; transition: fill .45s var(--ease); fill: #26262b; } /* grey/black default = not started */
+.init-grid rect { rx: .18; transition: fill .45s var(--ease); fill: #000; } /* black default = not started */
 .init-grid rect.s { fill: var(--yellow); animation: flash 1.1s steps(2, jump-none) infinite; }
 .init-grid rect.p { fill: var(--yellow); animation: none; }
 .init-grid rect.d { fill: var(--green); animation: none; }
