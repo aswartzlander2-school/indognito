@@ -313,8 +313,8 @@ class Wizard(Gtk.Window):
         r = self.res
         relax = os.environ.get("GNITO_DEV_RELAX") == "1"
         self.min_ram, self.min_store = (256, 512) if relax else (3072, 8192)
-        avail_ram, avail_store = r.get("ramAvailMB", 0), r.get("storageAvailMB", 0)
-        self.ram = NumericEntry(max(self.min_ram, min(4096, avail_ram)))
+        total_ram, avail_store = r.get("ramTotalMB", 0), r.get("storageAvailMB", 0)
+        self.ram = NumericEntry(max(self.min_ram, min(4096, total_ram)))
         self.store = NumericEntry(max(self.min_store, min(16384, avail_store)), 9, 9)
         cores = r.get("cpuCores", 1)
         self.cores = NumericEntry(cores, 4, 3)
@@ -323,7 +323,7 @@ class Wizard(Gtk.Window):
         self.page("storage", heading("Storage allocations"),
                   para("Choose how much of this computer Indognito's workspaces may use. Values are in megabytes."),
                   table(["Resource", "Minimum", "Maximum", "Allocate (MB)"], [
-                      ["RAM", mb(self.min_ram), mb(avail_ram) + " available now", self.ram],
+                      ["RAM", mb(self.min_ram), mb(total_ram) + " installed", self.ram],
                       ["Storage", mb(self.min_store), mb(avail_store) + " free", self.store]]),
                   heading("Processor allocation", "large"),
                   table(["Detected", "Available capacity", "Cores to use", "Capacity per core (%)"], [

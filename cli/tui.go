@@ -114,10 +114,10 @@ func runTUI(existing *Install) WizardResult {
 	if relaxed() {
 		minRAM, minStore = 256, 512
 	}
-	fmt.Printf("  %-10s %-12s %d MB (available now)\n", "RAM", fmt.Sprintf("%d MB", minRAM), r.RAMAvailMB)
+	fmt.Printf("  %-10s %-12s %d MB (installed)\n", "RAM", fmt.Sprintf("%d MB", minRAM), r.RAMTotalMB)
 	fmt.Printf("  %-10s %-12s %d MB (free space)\n\n", "Storage", fmt.Sprintf("%d MB", minStore), r.StorageAvailMB)
 	fmt.Printf("  Processor: %d core(s) detected.\n\n", r.CPUCores)
-	ram, store, cores, pct := max(minRAM, min(4096, r.RAMAvailMB)), max(minStore, min(16384, r.StorageAvailMB)), r.CPUCores, 100
+	ram, store, cores, pct := max(minRAM, min(4096, r.RAMTotalMB)), max(minStore, min(16384, r.StorageAvailMB)), r.CPUCores, 100
 	for {
 		ram = atoi(readLine(fmt.Sprintf("  RAM for workspaces (MB)     [%d]: ", ram)), ram)
 		store = atoi(readLine(fmt.Sprintf("  Storage for workspaces (MB) [%d]: ", store)), store)

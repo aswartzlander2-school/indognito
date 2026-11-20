@@ -186,13 +186,13 @@ class Wizard:
         r = self.res
         relax = os.environ.get("GNITO_DEV_RELAX") == "1"
         mr, ms = (256, 512) if relax else (3072, 8192)
-        self.ram = tk.StringVar(value=str(max(mr, min(4096, r.get("ramAvailMB", 0)))))
+        self.ram = tk.StringVar(value=str(max(mr, min(4096, r.get("ramTotalMB", 0)))))
         self.store = tk.StringVar(value=str(max(ms, min(16384, r.get("storageAvailMB", 0)))))
         self.cores = tk.StringVar(value=str(r.get("cpuCores", 1)))
         self.pct = tk.StringVar(value="100")
         self.h("Storage allocations")
         self.grid_table(["Resource", "Minimum", "Maximum", "Allocate (MB)"], [
-            ["RAM", f"{mr} MB", f"{r.get('ramAvailMB')} MB available", self.ram],
+            ["RAM", f"{mr} MB", f"{r.get('ramTotalMB')} MB installed", self.ram],
             ["Storage", f"{ms} MB", f"{r.get('storageAvailMB')} MB free", self.store]])
         self.h("Processor allocation", 14)
         self.grid_table(["Detected", "Available", "Cores", "Per core (%)"], [

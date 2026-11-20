@@ -169,8 +169,8 @@ func validateAllocation(ramMB, storageMB, cpuCores, cpuPct int) []string {
 	if ramMB < minRAM {
 		errs = append(errs, fmt.Sprintf("RAM must be at least %d MB (%.0f GB).", minRAM, float64(minRAM)/1024))
 	}
-	if ramMB > r.RAMAvailMB {
-		errs = append(errs, fmt.Sprintf("RAM cannot exceed what is currently available (%d MB).", r.RAMAvailMB))
+	if ramMB > r.RAMTotalMB {
+		errs = append(errs, fmt.Sprintf("RAM cannot exceed the machine's installed RAM (%d MB).", r.RAMTotalMB))
 	}
 	if storageMB < minStore {
 		errs = append(errs, fmt.Sprintf("Storage must be at least %d MB (%.0f GB).", minStore, float64(minStore)/1024))

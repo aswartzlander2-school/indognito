@@ -126,9 +126,9 @@ function Show-Storage {
   Clear-Page
   $r = Api @('resources', '--mode', $script:mode); $script:res = $r
   Heading 'Storage allocations'
-  $script:ramBox = NumBox ([Math]::Max(3072, [Math]::Min(4096, $r.ramAvailMB)))
+  $script:ramBox = NumBox ([Math]::Max(3072, [Math]::Min(4096, $r.ramTotalMB)))
   $script:stBox = NumBox ([Math]::Max(8192, [Math]::Min(16384, $r.storageAvailMB)))
-  Table @('Resource', 'Minimum', 'Maximum', 'Allocate (MB)') @(@('RAM', '3072 MB', "$($r.ramAvailMB) MB available", $script:ramBox), @('Storage', '8192 MB', "$($r.storageAvailMB) MB free", $script:stBox))
+  Table @('Resource', 'Minimum', 'Maximum', 'Allocate (MB)') @(@('RAM', '3072 MB', "$($r.ramTotalMB) MB installed", $script:ramBox), @('Storage', '8192 MB', "$($r.storageAvailMB) MB free", $script:stBox))
   Heading 'Processor allocation' 12
   $script:coreBox = NumBox $r.cpuCores; $script:pctBox = NumBox 100
   Table @('Detected', 'Available', 'Cores', 'Per core (%)') @(, @("$($r.cpuCores) core(s)", "$($r.cpuCores * 100)%", $script:coreBox, $script:pctBox))
