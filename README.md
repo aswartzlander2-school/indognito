@@ -137,7 +137,27 @@ gnito status                Show the frontend URL and backend status
 gnito re-install            Reinstall over an existing installation
 gnito uninstall [--purge]   Remove Indognito (--purge also deletes data)
 gnito logs [-f]             Show / follow the server log
+gnito update                Download and install the latest release
+gnito check-update          Check now whether a newer version exists
 ```
+
+### Updates
+
+`gnito` checks for a newer release in the background at most once every 30 minutes (piggy-backed on
+normal commands, never a daemon). When one is found, a banner appears above the next command's
+output:
+
+```
+================================================================
+  An update is available: Indognito 0.1.0 → 0.2.0
+  Run gnito update to install it.
+================================================================
+```
+
+Run `gnito update` to replace the binary with the latest release build for your platform, or
+`gnito check-update` to check on demand. Set `GNITO_NO_UPDATE_CHECK=1` to turn the automatic check
+off. For a private repository the check and download use your GitHub token (`gh auth login`, or
+`GITHUB_TOKEN`).
 
 ---
 
