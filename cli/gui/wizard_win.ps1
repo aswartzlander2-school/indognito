@@ -87,7 +87,7 @@ function Show-Welcome {
   Clear-Page
   Heading "Welcome to Indognito v$Version" 20
   Para 'This assistant sets up Indognito on this computer: an isolated browser, a terminal, file storage and an admin dashboard.'
-  if ($existing.version) { P "An existing installation (v$($existing.version)) was found at $($existing.installDir). It will be reinstalled; your data is kept." }
+  if ($existing.version) { Para "An existing installation (v$($existing.version)) was found at $($existing.installDir). It will be reinstalled; your data is kept." }
   Btn 'Next' { Show-Checks } $true; Btn 'Cancel' { Abort }
 }
 
