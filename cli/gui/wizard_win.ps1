@@ -35,8 +35,8 @@ $bar.FlowDirection = 'RightToLeft'; $bar.Dock = 'Bottom'; $bar.Height = 52; $bar
 $form.Controls.Add($body); $form.Controls.Add($bar)
 
 function Clear-Page { $body.Controls.Clear(); $bar.Controls.Clear() }
-function H($t, $size = 16) { $l = New-Object Windows.Forms.Label; $l.Text = $t; $l.AutoSize = $true; $l.Font = New-Object Drawing.Font('Segoe UI Semibold', $size); $l.Margin = '0,0,0,10'; $body.Controls.Add($l) }
-function P($t) { $l = New-Object Windows.Forms.Label; $l.Text = $t; $l.AutoSize = $true; $l.MaximumSize = New-Object Drawing.Size(720, 0); $l.Margin = '0,4,0,4'; $body.Controls.Add($l) }
+function Heading($t, $size = 16) { $l = New-Object Windows.Forms.Label; $l.Text = $t; $l.AutoSize = $true; $l.Font = New-Object Drawing.Font('Segoe UI Semibold', $size); $l.Margin = '0,0,0,10'; $body.Controls.Add($l) }
+function Para($t) { $l = New-Object Windows.Forms.Label; $l.Text = $t; $l.AutoSize = $true; $l.MaximumSize = New-Object Drawing.Size(720, 0); $l.Margin = '0,4,0,4'; $body.Controls.Add($l) }
 function Btn($t, $action, [bool]$primary = $false) {
   $b = New-Object Windows.Forms.Button; $b.Text = $t; $b.AutoSize = $true; $b.MinimumSize = New-Object Drawing.Size(90, 30)
   $b.Add_Click($action); $bar.Controls.Add($b); if ($primary) { $form.AcceptButton = $b }
@@ -67,16 +67,16 @@ $existing = Api @('existing')
 
 function Show-Welcome {
   Clear-Page
-  H "Welcome to Indognito v$Version" 20
-  P 'This assistant sets up Indognito on this computer: an isolated browser, a terminal, file storage and an admin dashboard.'
+  Heading "Welcome to Indognito v$Version" 20
+  Para 'This assistant sets up Indognito on this computer: an isolated browser, a terminal, file storage and an admin dashboard.'
   if ($existing.version) { P "An existing installation (v$($existing.version)) was found at $($existing.installDir). It will be reinstalled; your data is kept." }
   Btn 'Next' { Show-Checks } $true; Btn 'Cancel' { Abort }
 }
 
 function Show-Checks {
   Clear-Page
-  H 'Checking if your device is compatible...'
-  P "We're just checking to ensure we can stably run gnito on your machine. This will only take a moment."
+  Heading 'Checking if your device is compatible...'
+  Para "We're just checking to ensure we can stably run gnito on your machine. This will only take a moment."
   $pb = New-Object Windows.Forms.ProgressBar; $pb.Width = 720; $pb.Maximum = 10; $body.Controls.Add($pb)
   $list = New-Object Windows.Forms.ListBox; $list.Width = 720; $list.Height = 230; $body.Controls.Add($list)
   Btn 'Cancel' { Abort }
@@ -98,8 +98,8 @@ function Show-Checks {
 
 function Show-Perms {
   Clear-Page
-  H 'How should Indognito be installed?'
-  P 'Continue installs for your account only (recommended). Continue as Administrator installs to Program Files and asks for permission through User Account Control when installation starts.'
+  Heading 'How should Indognito be installed?'
+  Para 'Continue installs for your account only (recommended). Continue as Administrator installs to Program Files and asks for permission through User Account Control when installation starts.'
   Btn 'Continue' { $script:mode = 'user'; Show-Ports } $true
   Btn 'Continue as Administrator' { $script:mode = 'admin'; Show-Ports }
   Btn 'Cancel' { Abort }
@@ -108,7 +108,7 @@ function Show-Perms {
 function Show-Ports {
   Clear-Page
   $form.Size = New-Object Drawing.Size(900, 620)
-  H 'Port configuration'
+  Heading 'Port configuration'
   $be = if ($existing.backendPort) { $existing.backendPort } else { 7710 }
   $fe = if ($existing.frontendPort) { $existing.frontendPort } else { 7711 }
   $script:beBox = NumBox $be; $script:feBox = NumBox $fe
@@ -125,11 +125,11 @@ function Show-Ports {
 function Show-Storage {
   Clear-Page
   $r = Api @('resources', '--mode', $script:mode); $script:res = $r
-  H 'Storage allocations'
+  Heading 'Storage allocations'
   $script:ramBox = NumBox ([Math]::Max(3072, [Math]::Min(4096, $r.ramAvailMB)))
   $script:stBox = NumBox ([Math]::Max(8192, [Math]::Min(16384, $r.storageAvailMB)))
   Table @('Resource', 'Minimum', 'Maximum', 'Allocate (MB)') @(@('RAM', '3072 MB', "$($r.ramAvailMB) MB available", $script:ramBox), @('Storage', '8192 MB', "$($r.storageAvailMB) MB free", $script:stBox))
-  H 'Processor allocation' 12
+  Heading 'Processor allocation' 12
   $script:coreBox = NumBox $r.cpuCores; $script:pctBox = NumBox 100
   Table @('Detected', 'Available', 'Cores', 'Per core (%)') @(, @("$($r.cpuCores) core(s)", "$($r.cpuCores * 100)%", $script:coreBox, $script:pctBox))
   Btn 'Next' {
@@ -143,12 +143,12 @@ function Show-Storage {
 
 function Show-Confirm {
   Clear-Page
-  H 'Ready to install'
+  Heading 'Ready to install'
   $pm = if ($script:mode -eq 'admin') { 'Administrator' } else { 'Standard user' }
   Table @('Setting', 'Value') @(@('Backend port', $script:beBox.Text), @('Frontend port', $script:feBox.Text), @('Permission mode', $pm),
     @('RAM allocation', "$($script:ramBox.Text) MB"), @('Storage allocation', "$($script:stBox.Text) MB"),
     @('CPU allocation', "$($script:coreBox.Text) core(s) at $($script:pctBox.Text)%"), @('Installation destination', $script:dir))
-  P 'Continue lets you choose a different installation folder first.'
+  Para 'Continue lets you choose a different installation folder first.'
   Btn 'Install' { Show-Progress } $true
   Btn 'Continue' { $d = New-Object Windows.Forms.FolderBrowserDialog; if ($d.ShowDialog() -eq 'OK') { $script:dir = Join-Path $d.SelectedPath 'Indognito' }; Show-Confirm }
   Btn 'Cancel' { Abort }
@@ -156,7 +156,7 @@ function Show-Confirm {
 
 function Show-Progress {
   Clear-Page
-  H 'Installing Indognito'
+  Heading 'Installing Indognito'
   $pb = New-Object Windows.Forms.ProgressBar; $pb.Width = 720; $body.Controls.Add($pb)
   $labels = @{}
   foreach ($k in @(@('activity', 'Current activity'), @('component', 'Most recently installed'), @('dir', 'Installation directory'), @('transfer', 'Download / extraction'))) {
@@ -196,7 +196,7 @@ function Show-Progress {
   Start-Sleep -Milliseconds 300
   if (Test-Path $log) { foreach ($line in (Get-Content $log)) { try { $last = $line | ConvertFrom-Json } catch {} } }
   if ($last -and $last.done -and -not $last.error) {
-    Clear-Page; H 'Everything has installed successfully!' 20
+    Clear-Page; Heading 'Everything has installed successfully!' 20
     Btn 'OK' { Write-Result 'installed' ''; $script:done = $true; $form.Close() } $true
   } else {
     $reason = if ($last -and $last.error) { $last.error } else { 'The installer stopped unexpectedly.' }

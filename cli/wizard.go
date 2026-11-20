@@ -178,11 +178,13 @@ func runWizard(existing *Install, tui bool) int {
 	var res WizardResult
 	if b, err := os.ReadFile(resultFile); err == nil {
 		_ = json.Unmarshal(b, &res)
+	} else if runErr != nil {
+		// The graphical wizard crashed before writing a result (e.g. a toolkit error). Rather than
+		// dead-end, fall back to the text-mode wizard so setup can still complete.
+		fmt.Printf("%sThe graphical setup window could not run (%v); falling back to the text wizard.%s\n\n", yellow, runErr, reset)
+		return finishWizard(runTUI(existing), existing)
 	} else {
 		res = WizardResult{Outcome: "cancelled", Reason: "The setup window was closed."}
-		if runErr != nil {
-			res = WizardResult{Outcome: "failed", Reason: "The setup window exited unexpectedly: " + runErr.Error()}
-		}
 	}
 	return finishWizard(res, existing)
 }
