@@ -108,9 +108,17 @@ func stopServer(in *Install) {
 
 func printAccess(in *Install) {
 	ok, ver := healthy(in.Frontend)
-	fmt.Printf("  %sFrontend%s   http://localhost:%d/\n", bold, reset, in.Frontend)
+	scheme := "http"
+	if cfg, _, err := readConfigMap(in.ConfigFile); err == nil {
+		if tls, isMap := cfg["tls"].(map[string]any); isMap {
+			if m, _ := tls["mode"].(string); m == "files" {
+				scheme = "https"
+			}
+		}
+	}
+	fmt.Printf("  %sFrontend%s   %s://localhost:%d/\n", bold, reset, scheme, in.Frontend)
 	if host, err := os.Hostname(); err == nil {
-		fmt.Printf("             http://%s:%d/  (from other devices on your network, if your firewall allows it)\n", host, in.Frontend)
+		fmt.Printf("             %s://%s:%d/  (from other devices on your network, if your firewall allows it)\n", scheme, host, in.Frontend)
 	}
 	if ok {
 		fmt.Printf("  %sBackend%s    %srunning%s on 127.0.0.1:%d (v%s)\n", bold, reset, green, reset, in.Backend, ver)
@@ -118,6 +126,12 @@ func printAccess(in *Install) {
 		fmt.Printf("  %sBackend%s    %snot responding%s (port %d) — run \"gnito logs\"\n", bold, reset, red, reset, in.Backend)
 	}
 	fmt.Printf("  %sData%s       %s\n", bold, reset, in.DataDir)
+	if scheme == "http" {
+		fmt.Println()
+		fmt.Printf("  %s⚠ The connection is not encrypted (http).%s Anyone on the network path can read\n", red, reset)
+		fmt.Println("    sign-ins and data. If this is reachable beyond localhost, put Indognito behind")
+		fmt.Println("    HTTPS (a reverse proxy) or run \"gnito tls --self-signed\" for a quick certificate.")
+	}
 	fmt.Println()
 	fmt.Println("  Open the frontend URL in a browser. The first visit finishes initialization,")
 	fmt.Println("  then asks you to create the Owner account. Stop the server with \"gnito stop\".")

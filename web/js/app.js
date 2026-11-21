@@ -1,5 +1,5 @@
 // Indognito web app entry: decides between the init animation, onboarding, sign-in and the home screen.
-import { api, h, state, toast } from './core.js';
+import { api, h, icon, state, toast } from './core.js';
 import { showInit } from './views/init.js';
 import { showOnboarding, showLogin } from './views/onboarding.js';
 
@@ -11,6 +11,16 @@ export function mount(node, onLeave) {
   cleanup = onLeave || null;
   root.replaceChildren(node);
   dismissBoot();
+}
+
+// Warn when the browser↔server connection is plain http to a remote host (password/data exposed).
+function showInsecureWarning() {
+  if (document.querySelector('.insecure-bar') || sessionStorage.getItem('gnito.insecureDismissed')) return;
+  const bar = h('div', { class: 'insecure-bar', role: 'alert' },
+    icon('shield'),
+    h('span', {}, h('b', {}, 'This connection isn’t encrypted. '), 'You’re on http, so your password and data could be read in transit. Put Indognito behind HTTPS (a reverse proxy, or run ', h('code', { class: 'mono' }, 'gnito tls --self-signed'), ' on the host).'),
+    h('button', { class: 'btn sm ghost', onclick: () => { bar.remove(); sessionStorage.setItem('gnito.insecureDismissed', '1'); } }, 'Dismiss'));
+  document.body.append(bar);
 }
 
 // Fade out the instant boot splash once the first real screen is on-screen.
@@ -66,6 +76,7 @@ async function boot() {
     return;
   }
   state.version = status.version;
+  if (status.insecure) showInsecureWarning();
   if (!status.initialized) return showInit(mount, status);
   if (!status.hasOwner) return showOnboarding(mount, status);
   try {

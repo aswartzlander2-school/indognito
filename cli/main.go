@@ -20,7 +20,7 @@ import (
 )
 
 // Version is set at build time: -ldflags "-X main.Version=0.1.12"
-var Version = "0.1.18"
+var Version = "0.1.19"
 
 // ReleaseURL is where app bundles are downloaded from; override with GNITO_RELEASE_URL.
 var ReleaseURL = "https://github.com/aswartzlander2-school/indognito/releases/download/v{version}"
@@ -57,6 +57,7 @@ Commands:
   stop         Stop the running server
   restart      Restart the server (add --reinit to replay setup)
   status       Show the frontend URL and backend status
+  tls          Encrypt the connection (gnito tls --self-signed, or --off)
   re-install   Reinstall over an existing installation
   uninstall    Remove Indognito from this machine
   logs         Show the server log (use -f to follow)
@@ -107,6 +108,8 @@ func main() {
 		code = cmdRestart(args)
 	case "status":
 		code = cmdStatus()
+	case "tls":
+		code = cmdTLS(args)
 	case "uninstall":
 		code = cmdUninstall(args)
 	case "logs":

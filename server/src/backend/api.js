@@ -56,6 +56,16 @@ export function registerRoutes(router, ctx) {
     return Buffer.from(s).toString('base64');
   };
   const allocation = cfg.allocation;
+  // Transport security: a request is "insecure" when it arrives over plain HTTP from a non-loopback
+  // client — i.e. the browser↔server hop is unencrypted and could be eavesdropped. Loopback (an SSH
+  // tunnel or same-machine access) is fine; HTTPS directly or via a trusted proxy is fine.
+  const isLoopback = (ip) => !ip || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip.startsWith('127.');
+  const insecureReq = (req) => !req.isHttps && !isLoopback(req.clientIp);
+  const guardInsecureAuth = (req) => {
+    if (insecureReq(req) && !settings.get('security.allowInsecureAuth', false)) {
+      throw new HttpError(403, 'For your security, signing in over an unencrypted (http) connection to a remote address is blocked, so your password is never sent in the clear. Put Indognito behind HTTPS — a reverse proxy, or run "gnito tls --self-signed" on the host for a quick certificate — or, on a trusted private network, set security.allowInsecureAuth in the server config to override.');
+    }
+  };
   const kickUser = (uid, reason) => {
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(uid);
     terminals.terminateUser(uid, reason);
@@ -76,12 +86,13 @@ export function registerRoutes(router, ctx) {
 
   router.get('/api/setup/status', (req, res) => {
     const users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
-    send(res, 200, { version: VERSION, hostname: cfg.hostname, initialized: init.done, hasOwner: users > 0, ...init.progress() });
+    send(res, 200, { version: VERSION, hostname: cfg.hostname, initialized: init.done, hasOwner: users > 0, insecure: insecureReq(req), ...init.progress() });
   });
   router.post('/api/setup/init', (req, res) => { init.start(); send(res, 202, init.progress()); });
 
   router.post('/api/setup/owner', async (req, res) => {
     if (!init.done) throw new HttpError(409, 'Initialization has not finished yet');
+    guardInsecureAuth(req);
     rateLimit('owner:' + req.clientIp, 10);
     const b = await readJson(req);
     const username = str(b.username, 'Username', { min: 3, max: 32, pattern: USERNAME });
@@ -119,6 +130,7 @@ export function registerRoutes(router, ctx) {
   };
 
   router.post('/api/auth/login', async (req, res) => {
+    guardInsecureAuth(req);
     const b = await readJson(req);
     rateLimit('login:' + req.clientIp, 20);
     const username = str(b.username, 'Username', { max: 64 });
