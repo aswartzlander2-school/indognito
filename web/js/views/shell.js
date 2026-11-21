@@ -1,12 +1,13 @@
 // Shared chrome for app views: header with back-to-home, and the user menu.
-import { api, h, icon, state } from '../core.js';
+import { api, h, icon, logo, state } from '../core.js';
 import { go } from '../app.js';
 import { lockHistory } from '../crypto.js';
 
 export function appHeader(title, ic, ...right) {
   return h('header', { class: 'app-head' },
-    h('button', { class: 'btn ghost sm', onclick: () => go('home'), 'aria-label': 'Back to home' }, icon('home'), 'Home'),
-    icon(ic), h('h2', {}, title), h('span', { class: 'grow' }), ...right, userMenu());
+    h('button', { class: 'home-btn', onclick: () => go('home'), 'aria-label': 'Back to home', title: 'Home' }, logo('sm')),
+    h('span', { class: 'head-title' }, icon(ic), h('h2', {}, title)),
+    h('span', { class: 'grow' }), ...right, userMenu());
 }
 
 export function userMenu() {

@@ -19,7 +19,11 @@ function which(cmd) {
 export function ptyHelperPath() {
   const exe = os.platform() === 'win32' ? 'gnito.exe' : 'gnito';
   const candidates = [process.env.GNITO_PTY_HELPER, path.join(APP_ROOT, 'bin', exe), path.join(APP_ROOT, 'cli', 'build', exe)];
-  return candidates.find((p) => p && fs.existsSync(p)) || null;
+  const found = candidates.find((p) => p && fs.existsSync(p));
+  if (found) return found;
+  // Fall back to the installed `gnito` command on PATH, so a missing/not-yet-copied bundled helper
+  // (e.g. an interrupted update) doesn't disable terminals.
+  return which(exe);
 }
 
 function sandboxArgs(ws, opts) {
