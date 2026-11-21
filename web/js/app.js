@@ -10,6 +10,15 @@ export function mount(node, onLeave) {
   if (cleanup) { try { cleanup(); } catch { /* ignore */ } }
   cleanup = onLeave || null;
   root.replaceChildren(node);
+  dismissBoot();
+}
+
+// Fade out the instant boot splash once the first real screen is on-screen.
+function dismissBoot() {
+  const boot = document.getElementById('boot');
+  if (!boot || boot.classList.contains('gone')) return;
+  boot.classList.add('gone');
+  setTimeout(() => boot.remove(), 400);
 }
 
 // Each view (and its own dependencies) is a separate module loaded only when first navigated to,
@@ -53,6 +62,7 @@ async function boot() {
       h('h1', {}, 'The Indognito backend isn’t responding'),
       h('p', {}, 'The web interface loaded, but the backend server didn’t answer. It may still be starting, or it crashed. On the host, run ', h('code', { class: 'mono' }, 'gnito status'), ' or ', h('code', { class: 'mono' }, 'gnito logs'), '.'),
       h('button', { class: 'btn primary', onclick: () => location.reload() }, 'Try again'))));
+    dismissBoot();
     return;
   }
   state.version = status.version;
@@ -75,8 +85,8 @@ window.addEventListener('gnito:signedin', (e) => { Object.assign(state, e.detail
 document.addEventListener('keydown', (e) => {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
   const a = document.activeElement;
-  if (!a || !a.matches('.tile, .shortcut')) return;
-  const items = [...document.querySelectorAll('.tile, .shortcut')];
+  if (!a || !a.matches('.tile, .action')) return;
+  const items = [...document.querySelectorAll('.tile, .action')];
   const r0 = a.getBoundingClientRect();
   const c0 = { x: r0.left + r0.width / 2, y: r0.top + r0.height / 2 };
   let best = null, bestD = Infinity;
