@@ -29,6 +29,24 @@ export function ptyHelperPath() {
 // Validated elsewhere (USERNAME regex), but belt-and-suspenders: keep only safe prompt characters.
 function safeName(u) { return String(u || 'user').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 32) || 'user'; }
 
+// A tiny synthetic /etc/passwd + /etc/group bound over the host's, so the sandboxed shell never sees
+// the host's real user accounts. Written once under the data dir and reused.
+let sandboxEtc = null;
+function ensureSandboxEtc(dataDir) {
+  if (sandboxEtc) return sandboxEtc;
+  const dir = path.join(dataDir, '.sandbox-etc');
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+    const uid = process.getuid ? process.getuid() : 1000;
+    const gid = process.getgid ? process.getgid() : 1000;
+    fs.writeFileSync(path.join(dir, 'passwd'), `root:x:0:0:root:/root:/bin/bash\ngnito:x:${uid}:${gid}:gnito:/home/gnito:/bin/bash\n`, { mode: 0o644 });
+    fs.writeFileSync(path.join(dir, 'group'), `root:x:0:\ngnito:x:${gid}:\n`, { mode: 0o644 });
+    fs.writeFileSync(path.join(dir, 'hostname'), 'gnito\n', { mode: 0o644 });
+    sandboxEtc = dir;
+  } catch { sandboxEtc = null; }
+  return sandboxEtc;
+}
+
 function sandboxArgs(ws, opts) {
   const user = safeName(opts.user);
   const a = ['--die-with-parent', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--hostname', 'gnito',
@@ -41,9 +59,16 @@ function sandboxArgs(ws, opts) {
       else if (st.isDirectory()) a.push('--ro-bind', p, p);
     } catch { /* absent */ }
   }
-  // /etc read-only (passwd, ssl certs, resolv.conf, alternatives…)
+  // /etc read-only for the few files a shell needs (ssl certs, resolv.conf, ld.so cache, alternatives…).
+  // /opt is NOT bound — it's host software, not needed for a shell. Host user accounts and hostname are
+  // then masked with synthetic files so the sandbox never reveals who/what is on the host.
   a.push('--ro-bind', '/etc', '/etc');
-  if (fs.existsSync('/opt')) a.push('--ro-bind', '/opt', '/opt');
+  const etc = opts.etc;
+  if (etc) {
+    for (const f of ['passwd', 'group', 'hostname']) {
+      try { if (fs.existsSync(path.join(etc, f))) a.push('--ro-bind', path.join(etc, f), '/etc/' + f); } catch { /* skip */ }
+    }
+  }
   a.push('--bind', ws, '/home/gnito', '--chdir', '/home/gnito');
   if (!opts.network) a.push('--unshare-net');
   a.push('--clearenv', '--setenv', 'HOME', '/home/gnito', '--setenv', 'USER', user, '--setenv', 'LOGNAME', user,
@@ -59,7 +84,7 @@ let probe;
 export function detectDrivers(cfg) {
   if (probe) return probe;
   const plat = os.platform();
-  const out = { platform: plat, pty: !!ptyHelperPath(), sandbox: false, sandboxReason: '', limits: 'monitor', process: true, microvm: !!cfg.runtime?.microvm?.url };
+  const out = { platform: plat, pty: !!ptyHelperPath(), sandbox: false, sandboxReason: '', limits: 'monitor', process: true, microvm: !!cfg.runtime?.microvm?.url, sandboxEtc: ensureSandboxEtc(cfg.dataDir) };
   if (plat !== 'linux') out.sandboxReason = 'Bubblewrap sandboxing is Linux-only.';
   else if (!which('bwrap')) out.sandboxReason = 'bubblewrap (bwrap) is not installed.';
   else {
@@ -97,7 +122,7 @@ export function spawnLocal(kind, { ws, cols, rows, limits, network, user, probe:
   let argv;
   let env;
   if (kind === 'sandbox' && p.sandbox) {
-    argv = ['bwrap', ...sandboxArgs(ws, { network, user: uname })];
+    argv = ['bwrap', ...sandboxArgs(ws, { network, user: uname, etc: p.sandboxEtc })];
     env = { PATH: process.env.PATH };
   } else {
     // Unsandboxed host shell — only reached as an explicit, Owner-allowed override (allowedFor

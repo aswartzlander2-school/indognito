@@ -46,8 +46,12 @@ export class Terminals extends EventEmitter {
     const allowed = this.allowedFor(user);
     if (!allowed.ok) { const e = new Error(allowed.reason); e.status = 403; throw e; }
     const id = crypto.randomBytes(9).toString('base64url');
+    const p = this.probe();
+    // Report the driver that will actually run: if 'sandbox' is selected but bubblewrap can't run
+    // here, the shell is really an unsandboxed process — don't claim isolation we aren't providing.
+    const driver = p.selected === 'sandbox' && !p.sandbox ? 'process' : p.selected;
     const s = {
-      id, userId: user.id, username: user.username, status: 'allocating', phase: 'Allocating runtime…', driver: this.probe().selected,
+      id, userId: user.id, username: user.username, status: 'allocating', phase: 'Allocating runtime…', driver,
       created: Date.now(), cols, rows, buf: [], bufLen: 0, clients: new Set(), rt: null, exitReason: null,
       title: `Session ${mine.length + 1}`,
       pids: () => s.rt?.pids || [],
