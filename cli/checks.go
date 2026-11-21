@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	minRAMMB      = 4 * 1024
+	minRAMMB      = 3 * 1024 // a "4 GB" VM commonly reports ~3.3-3.8 GB usable after firmware/kernel reservation
 	minStorageMB  = 24 * 1024
 	minAllocRAM   = 3 * 1024
 	minAllocStore = 8 * 1024
@@ -41,7 +41,9 @@ type Resources struct {
 	AdminDir       string `json:"adminInstallDir"`
 }
 
-func relaxed() bool { return os.Getenv("GNITO_DEV_RELAX") == "1" }
+func relaxed() bool {
+	return os.Getenv("GNITO_DEV_RELAX") == "1" || os.Getenv("GNITO_SKIP_CHECKS") == "1"
+}
 
 func resources(mode string) Resources {
 	inst, _ := defaultDirs(mode)
@@ -76,7 +78,7 @@ func runChecks() []Check {
 		Detail: fmt.Sprintf("%s, %d core(s)", runtime.GOARCH, r.CPUCores)})
 
 	ramOK := r.RAMTotalMB >= minRAMMB
-	add(Check{ID: "ram", Label: "Total RAM (4 GB minimum)", OK: ramOK || relaxed(), Fatal: true,
+	add(Check{ID: "ram", Label: "Total RAM (3 GB minimum)", OK: ramOK || relaxed(), Fatal: true,
 		Detail: fmt.Sprintf("%.1f GB installed (%.1f GB available now)", float64(r.RAMTotalMB)/1024, float64(r.RAMAvailMB)/1024) + relaxNote(ramOK)})
 
 	diskOK := r.StorageAvailMB >= minStorageMB

@@ -42,27 +42,63 @@ func stateFile() string {
 	return filepath.Join(d, "indognito", "install.json")
 }
 
+// systemStateFile is a machine-wide copy of the install record for admin (system) installs, so that
+// `sudo gnito …` (which reads root's config dir, not the invoking user's) and any user on the box can
+// still find the installation.
+func systemStateFile() string {
+	if runtime.GOOS == "windows" {
+		if pd := os.Getenv("ProgramData"); pd != "" {
+			return filepath.Join(pd, "Indognito", "install.json")
+		}
+		return ""
+	}
+	return "/etc/indognito/install.json"
+}
+
 func loadInstall() (*Install, error) {
-	b, err := os.ReadFile(stateFile())
-	if err != nil {
-		return nil, err
+	paths := []string{stateFile()}
+	if s := systemStateFile(); s != "" {
+		paths = append(paths, s)
 	}
-	var in Install
-	if err := json.Unmarshal(b, &in); err != nil {
-		return nil, err
+	var lastErr error
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		var in Install
+		if err := json.Unmarshal(b, &in); err != nil {
+			lastErr = err
+			continue
+		}
+		if _, err := os.Stat(in.AppDir); err != nil {
+			lastErr = err
+			continue
+		}
+		return &in, nil
 	}
-	if _, err := os.Stat(in.AppDir); err != nil {
-		return nil, err
-	}
-	return &in, nil
+	return nil, lastErr
 }
 
 func saveInstall(path string, in *Install) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	write := func(p string) error {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		b, _ := json.MarshalIndent(in, "", "  ")
+		return os.WriteFile(p, b, 0o644)
+	}
+	if err := write(path); err != nil {
 		return err
 	}
-	b, _ := json.MarshalIndent(in, "", "  ")
-	return os.WriteFile(path, b, 0o644)
+	// Admin installs also drop a machine-wide copy so sudo/other users can find the install.
+	if in.Mode == "admin" {
+		if s := systemStateFile(); s != "" && s != path {
+			_ = write(s) // best-effort (needs elevation, which admin installs already have)
+		}
+	}
+	return nil
 }
 
 // defaultDirs returns install and data directories for the permission mode.

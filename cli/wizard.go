@@ -238,6 +238,7 @@ func finishWizard(res WizardResult, existing *Install) int {
 			}
 		}
 		fmt.Println("  Temporary setup files were removed.")
+		fmt.Printf("  To install anyway (e.g. a VM that reports slightly under the minimum), re-run with\n    %sGNITO_SKIP_CHECKS=1 gnito start%s\n", bold, reset)
 		return 1
 	default:
 		fmt.Printf("%s✗ Setup failed: %s%s\n", red, res.Reason, reset)
