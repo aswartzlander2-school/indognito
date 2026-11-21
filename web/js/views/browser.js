@@ -215,16 +215,30 @@ export async function showBrowser(mount) {
     }), h('button', { class: 'tab-add', 'aria-label': 'New tab', title: 'New tab', onclick: () => newTab() }, '+'));
   }
 
-  // The favicon is read from the proxied document and loaded through the proxy, so it never
-  // reaches an external favicon service.
+  // The tab favicon is always loaded THROUGH this server's proxy (same-origin), never fetched
+  // directly from the site — otherwise the page's own CSP (img-src 'self') blocks it and the icon
+  // breaks. We read the <link rel="icon"> from the proxied document when we can, resolve it against
+  // the real page URL, and route it through Scramjet; otherwise we fall back to /favicon.ico.
+  function proxify(realUrl) {
+    try { return engine.scramjet.encodeUrl(realUrl); } catch { return null; }
+  }
   function readFavicon(t) {
+    if (!t.url || !engine) return false;
+    let real = null;
     try {
       const doc = t.iframe.contentDocument;
-      const link = doc?.querySelector('link[rel~="icon" i]');
-      let href = link?.href || null;
-      if (!href && t.url) { try { href = engine.scramjet.encodeUrl(new URL('/favicon.ico', t.url).href); } catch { href = null; } }
-      if (href !== t.favicon) { t.favicon = href; return true; }
-    } catch { /* same-origin under proxy; ignore */ }
+      const link = doc?.querySelector('link[rel~="icon" i], link[rel~="shortcut" i]');
+      const raw = link?.getAttribute('href');
+      if (raw) {
+        // If the proxied document already rewrote the href to a same-origin proxied URL, use it as-is;
+        // otherwise resolve the raw value against the page's real URL so we can re-encode it.
+        real = /^https?:\/\//i.test(raw) && raw.startsWith(location.origin) ? '__proxied__' + raw : new URL(raw, t.url).href;
+      }
+    } catch { /* cross-origin under proxy — fall back to /favicon.ico */ }
+    let next;
+    if (real && real.startsWith('__proxied__')) next = real.slice('__proxied__'.length);
+    else next = proxify(real || new URL('/favicon.ico', t.url).href);
+    if (next && next !== t.favicon) { t.favicon = next; return true; }
     return false;
   }
 
