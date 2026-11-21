@@ -1,5 +1,5 @@
 // Home screen: a greeting hero, primary action cards, a workspace strip, and app category rows.
-import { api, h, icon, appIcon, logo, meter, fmtBytes, state, toast } from '../core.js';
+import { api, h, icon, appIcon, logo, meter, fmtBytes, state, toast, pixelBackground } from '../core.js';
 import { go } from '../app.js';
 import { userMenu } from './shell.js';
 
@@ -60,6 +60,7 @@ export async function showHome(mount) {
     rows);
 
   const shell = h('div', { class: 'shell' },
+    pixelBackground(34, 20),
     h('header', { class: 'topbar' }, logo('sm'), h('span', { class: 'grow' }),
       iconBtn('settings', 'Settings', 'settings'), canAdmin ? iconBtn('shield', 'Administration', 'admin') : null, userMenu()),
     main);
