@@ -55,8 +55,10 @@ export class BrowserQueue {
   // "epoxy": Rust/WASM TLS (default). "libcurl": libcurl.js/WASM. Both do TLS to each site *inside*
   // the page, so the relay only sees encrypted bytes for https; the choice is about compatibility
   // and performance, not disguising traffic. Admin-selectable.
-  transport() {
-    const t = this.settings.get('browser.transport', 'epoxy');
+  transport(userId) {
+    // A user may pick their own transport in Settings; otherwise the server-wide default applies.
+    const perUser = userId != null ? this.settings.get(`user.${userId}.transport`, '') : '';
+    const t = perUser || this.settings.get('browser.transport', 'epoxy');
     return t === 'libcurl' ? 'libcurl' : 'epoxy';
   }
 
@@ -84,11 +86,11 @@ export class BrowserQueue {
     const ticket = crypto.randomBytes(18).toString('base64url');
     const runId = this.db.prepare('INSERT INTO browser_runs (user_id, started) VALUES (?, ?)').run(userId, Date.now()).lastInsertRowid;
     this.slots.set(ticket, { ticket, userId, started: Date.now(), lastActive: Date.now(), sockets: new Set(), runId, bytes: 0, queueId });
-    return { status: 'active', ticket, id: queueId || ticket, transport: this.transport() };
+    return { status: 'active', ticket, id: queueId || ticket, transport: this.transport(userId) };
   }
 
   status(id, userId) {
-    for (const s of this.slots.values()) if ((s.queueId === id || s.ticket === id) && s.userId === userId) return { status: 'active', ticket: s.ticket, id, transport: this.transport() };
+    for (const s of this.slots.values()) if ((s.queueId === id || s.ticket === id) && s.userId === userId) return { status: 'active', ticket: s.ticket, id, transport: this.transport(userId) };
     const i = this.queue.findIndex((q) => q.id === id && q.userId === userId);
     if (i < 0) return { status: 'expired', id };
     this.queue[i].lastPoll = Date.now();

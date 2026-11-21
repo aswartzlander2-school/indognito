@@ -292,11 +292,17 @@ export function registerRoutes(router, ctx) {
       db.prepare('UPDATE users SET search_engine = ? WHERE id = ?').run(b.searchEngine, u.id);
     }
     if (b.saveHistory !== undefined) settings.set(`user.${u.id}.saveHistory`, !!b.saveHistory);
+    // Per-user browser transport preference: 'epoxy' | 'libcurl' | '' (follow the server default).
+    if (b.transport !== undefined) {
+      const t = b.transport === 'libcurl' ? 'libcurl' : b.transport === 'epoxy' ? 'epoxy' : '';
+      if (t) settings.set(`user.${u.id}.transport`, t); else settings.delete(`user.${u.id}.transport`);
+    }
     send(res, 200, { user: publicUser(getUser(u.id)), saveHistory: settings.get(`user.${u.id}.saveHistory`, false) });
   });
   router.get('/api/me/preferences', (req, res) => {
     const u = needUser(req);
-    send(res, 200, { searchEngine: u.search_engine, sessionHours: u.session_hours, saveHistory: settings.get(`user.${u.id}.saveHistory`, false), engines: SEARCH_ENGINES });
+    send(res, 200, { searchEngine: u.search_engine, sessionHours: u.session_hours, saveHistory: settings.get(`user.${u.id}.saveHistory`, false), engines: SEARCH_ENGINES,
+      transport: settings.get(`user.${u.id}.transport`, ''), transportDefault: browserq.transport(), transports: ['epoxy', 'libcurl'] });
   });
   router.get('/api/me/sessions', (req, res) => {
     const u = needUser(req);

@@ -1,24 +1,30 @@
 // Settings: password, passkeys, two-step sign-in, sessions, browser preferences.
-import { api, h, icon, toast, modal, field, confirmBox, fmtTime, state, passkeysPossible } from '../core.js';
+import { api, h, icon, toast, modal, field, confirmBox, fmtTime, state, passkeysPossible, pixelBackground } from '../core.js';
 import { appHeader, clearBrowserData } from './shell.js';
 import { registerPasskey, setupTotp } from './security.js';
 import { rewrapHistory } from '../crypto.js';
 
+const TRANSPORT_LABELS = { epoxy: 'Epoxy — Rust/WASM TLS', libcurl: 'libcurl.js — WASM' };
+const sectionTitle = (ic, text) => h('h3', { class: 'row-title section' }, icon(ic), text);
+
 export async function showSettings(mount) {
-  const pane = h('main', { class: 'main', style: { paddingTop: '24px', maxWidth: '880px', margin: '0 auto', width: '100%' } });
-  mount(h('div', { class: 'shell' }, appHeader('Settings', 'settings'), pane));
+  const pane = h('main', { class: 'main settings' });
+  mount(h('div', { class: 'shell' }, pixelBackground(34, 20), appHeader('Settings', 'settings'), pane));
   const render = async () => {
     const [me, prefs, pk, sess] = await Promise.all([api('api/auth/me'), api('api/me/preferences'), api('api/security/passkeys'), api('api/me/sessions')]);
     state.user = me.user;
     const engine = h('select', { class: 'input' }, prefs.engines.map((e) => h('option', { value: e, selected: e === prefs.searchEngine }, { duckduckgo: 'DuckDuckGo (default)', startpage: 'Startpage', brave: 'Brave Search', ecosia: 'Ecosia', bing: 'Bing', google: 'Google' }[e])));
     const saveHist = h('input', { type: 'checkbox', checked: prefs.saveHistory });
     const hours = h('select', { class: 'input' }, [[4, '4 hours'], [12, '12 hours'], [24, '1 day'], [168, '1 week'], [720, '30 days']].map(([v, l]) => h('option', { value: v, selected: v === prefs.sessionHours }, l)));
+    const transport = h('select', { class: 'input' },
+      h('option', { value: '', selected: !prefs.transport }, `Server default — ${TRANSPORT_LABELS[prefs.transportDefault] || prefs.transportDefault}`),
+      ...(prefs.transports || ['epoxy', 'libcurl']).map((t) => h('option', { value: t, selected: prefs.transport === t }, TRANSPORT_LABELS[t] || t)));
     const canPk = passkeysPossible();
     pane.replaceChildren(
-      h('h3', { class: 'row-title' }, 'Account'),
+      sectionTitle('user', 'Account'),
       h('div', { class: 'card col' }, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', {}, me.user.username), h('div', { class: 'muted' }, `${me.user.roleName} · Indognito ${me.version}`)),
         h('button', { class: 'btn', onclick: changePassword }, icon('key'), 'Change password'))),
-      h('h3', { class: 'row-title section' }, 'Security'),
+      sectionTitle('shield', 'Security'),
       h('div', { class: 'card col', style: { gap: '16px' } },
         h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', {}, 'Passkeys'), h('div', { class: 'muted' }, canPk ? `${pk.passkeys.length} registered` : 'Passkeys need localhost or a domain over HTTPS, not a bare IP.')),
           h('button', { class: 'btn', disabled: !canPk, onclick: async () => { if (await registerPasskey()) render(); } }, icon('plus'), 'Add passkey')),
@@ -27,12 +33,14 @@ export async function showSettings(mount) {
         h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', {}, 'Two-step sign-in (authenticator app)'), h('div', { class: 'muted' }, me.user.totpEnabled ? 'On' : 'Off')),
           me.user.totpEnabled ? h('button', { class: 'btn danger', onclick: disableTotp }, 'Turn off') : h('button', { class: 'btn', onclick: async () => { if (await setupTotp()) render(); } }, 'Set up')),
         h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', {}, 'Stay signed in for'), h('div', { class: 'muted' }, 'Applies to new sign-ins.')), h('div', { style: { width: '180px' } }, hours))),
-      h('h3', { class: 'row-title section' }, 'Signed-in devices'),
+      sectionTitle('user', 'Signed-in devices'),
       h('div', { class: 'card col' }, ...sess.sessions.map((s) => h('div', { class: 'row' }, h('div', { class: 'grow' }, h('b', {}, s.current ? 'This device' : (s.ua || 'Unknown device').slice(0, 70)), h('div', { class: 'faint', style: { fontSize: '13px' } }, `${s.ip || ''} · last active ${fmtTime(s.last_seen)}`)))),
         sess.sessions.length > 1 ? h('div', {}, h('button', { class: 'btn danger sm', onclick: async () => { await api('api/me/sessions/revoke-others', { method: 'POST', body: {} }); toast('Other devices were signed out'); render(); } }, 'Sign out other devices')) : null),
-      h('h3', { class: 'row-title section' }, 'Browser'),
+      sectionTitle('globe', 'Browser'),
       h('div', { class: 'card col', style: { gap: '16px' } },
         field('Search engine', engine),
+        field('Connection protocol', transport),
+        h('p', { class: 'faint', style: { margin: '-6px 0 0', fontSize: '13px' } }, 'The transport that carries page traffic from the browser engine to this server’s relay. Both perform TLS to each site, so secure (https) pages stay encrypted end-to-end either way — pick whichever is more reliable for you. Applies to your next browser session.'),
         h('label', { class: 'check' }, saveHist, 'Save browsing history to my account'),
         h('p', { class: 'faint', style: { margin: '-6px 0 0', fontSize: '13px' } }, 'Off by default. When on, history is end-to-end encrypted in your browser with a key derived from your password — the server stores only ciphertext and cannot read the sites you visit. (Signing in with a passkey instead of a password can’t unlock it, and an administrator password reset makes earlier history unreadable.)'),
         h('div', { class: 'row' },
@@ -40,7 +48,7 @@ export async function showSettings(mount) {
           h('button', { class: 'btn sm', onclick: async () => { await clearBrowserData(); toast('Site cookies and storage on this device were cleared'); } }, 'Clear site data on this device'))),
       h('div', { style: { marginTop: '22px' } }, h('button', { class: 'btn primary', onclick: async () => {
         try {
-          const r = await api('api/me/preferences', { method: 'PUT', body: { searchEngine: engine.value, saveHistory: saveHist.checked, sessionHours: Number(hours.value) } });
+          const r = await api('api/me/preferences', { method: 'PUT', body: { searchEngine: engine.value, saveHistory: saveHist.checked, sessionHours: Number(hours.value), transport: transport.value } });
           state.user = r.user; toast('Settings saved');
         } catch (e) { toast(e.message, true); }
       } }, 'Save settings')));
