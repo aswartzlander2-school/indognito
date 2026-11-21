@@ -1,6 +1,7 @@
 // Shared chrome for app views: header with back-to-home, and the user menu.
 import { api, h, icon, state } from '../core.js';
 import { go } from '../app.js';
+import { lockHistory } from '../crypto.js';
 
 export function appHeader(title, ic, ...right) {
   return h('header', { class: 'app-head' },
@@ -21,6 +22,7 @@ export function userMenu() {
       (u.isOwner || u.perms.length) ? h('button', { role: 'menuitem', onclick: () => go('admin') }, icon('shield'), 'Administration') : null,
       h('button', { role: 'menuitem', onclick: async () => {
         await clearBrowserData();
+        await lockHistory(); // forget the zero-knowledge history key on this device
         await api('api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
         location.hash = ''; location.reload();
       } }, icon('logout'), 'Sign out'));

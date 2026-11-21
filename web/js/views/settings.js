@@ -2,6 +2,7 @@
 import { api, h, icon, toast, modal, field, confirmBox, fmtTime, state, passkeysPossible } from '../core.js';
 import { appHeader, clearBrowserData } from './shell.js';
 import { registerPasskey, setupTotp } from './security.js';
+import { rewrapHistory } from '../crypto.js';
 
 export async function showSettings(mount) {
   const pane = h('main', { class: 'main', style: { paddingTop: '24px', maxWidth: '880px', margin: '0 auto', width: '100%' } });
@@ -33,7 +34,7 @@ export async function showSettings(mount) {
       h('div', { class: 'card col', style: { gap: '16px' } },
         field('Search engine', engine),
         h('label', { class: 'check' }, saveHist, 'Save browsing history to my account'),
-        h('p', { class: 'faint', style: { margin: '-6px 0 0', fontSize: '13px' } }, 'Off by default — your browsing is not recorded unless you turn this on.'),
+        h('p', { class: 'faint', style: { margin: '-6px 0 0', fontSize: '13px' } }, 'Off by default. When on, history is end-to-end encrypted in your browser with a key derived from your password — the server stores only ciphertext and cannot read the sites you visit. (Signing in with a passkey instead of a password can’t unlock it, and an administrator password reset makes earlier history unreadable.)'),
         h('div', { class: 'row' },
           h('button', { class: 'btn danger sm', onclick: async () => { await api('api/browser/history', { method: 'DELETE' }); toast('History cleared'); } }, 'Clear history'),
           h('button', { class: 'btn sm', onclick: async () => { await clearBrowserData(); toast('Site cookies and storage on this device were cleared'); } }, 'Clear site data on this device'))),
@@ -48,7 +49,12 @@ export async function showSettings(mount) {
     const cur = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
     const nw = h('input', { class: 'input', type: 'password', autocomplete: 'new-password' });
     const ok = await modal('Change password', h('div', { class: 'col' }, field('Current password', cur), field('New password (10+ characters)', nw)), [
-      { label: 'Cancel', value: false }, { label: 'Change', kind: 'primary', run: async () => { await api('api/auth/password', { method: 'POST', body: { current: cur.value, password: nw.value } }); return true; } }]);
+      { label: 'Cancel', value: false }, { label: 'Change', kind: 'primary', run: async () => {
+        await api('api/auth/password', { method: 'POST', body: { current: cur.value, password: nw.value } });
+        // Re-wrap the zero-knowledge history key under the new password so history stays readable.
+        try { const me = await api('api/auth/me'); await rewrapHistory(cur.value, nw.value, me); } catch { /* best effort */ }
+        return true;
+      } }]);
     if (ok) toast('Password changed. Other devices were signed out.');
   };
   const disableTotp = async () => {

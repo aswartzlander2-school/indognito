@@ -52,6 +52,19 @@ const MIGRATIONS = [
    CREATE TABLE apps (
      id TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL, category TEXT NOT NULL,
      description TEXT, icon TEXT, enabled INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0);`,
+  // Zero-knowledge browsing history. Each user has: a random non-secret salt (enc_salt) and a
+  // wrapped_key — a random AES-GCM "master" key encrypted in the browser with a key derived from the
+  // account password. The server stores only the salt, the wrapped key and ciphertext history rows
+  // (enc=1, iv+ct); it can never read the master key, the URLs or the titles. Because history is
+  // encrypted under the stable master key, a password change only re-wraps that key (cheap) instead
+  // of re-encrypting every row; an admin password *reset* clears wrapped_key, so — by design — the
+  // old encrypted history can no longer be decrypted by anyone. Legacy/plaintext rows keep enc=0.
+  `ALTER TABLE users ADD COLUMN enc_salt BLOB;
+   UPDATE users SET enc_salt = randomblob(16) WHERE enc_salt IS NULL;
+   ALTER TABLE users ADD COLUMN wrapped_key TEXT;
+   ALTER TABLE history ADD COLUMN enc INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE history ADD COLUMN iv TEXT;
+   ALTER TABLE history ADD COLUMN ct TEXT;`,
 ];
 
 export function openDb(dataDir) {

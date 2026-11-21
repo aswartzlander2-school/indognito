@@ -3,6 +3,7 @@
 // Server capacity is managed by a queue: when all browser slots are busy, the user sees "You're in line."
 import { api, h, icon, BASE, toast, state, fmtTime, logo, pixelBackground } from '../core.js';
 import { userMenu } from './shell.js';
+import { historyKey, encryptEntry, decryptEntry } from '../crypto.js';
 
 const ENGINES = {
   duckduckgo: ['DuckDuckGo', 'https://duckduckgo.com/?q=%s'], startpage: ['Startpage', 'https://www.startpage.com/do/search?q=%s'],
@@ -285,10 +286,14 @@ export async function showBrowser(mount) {
 
   // ----- history -----
   let lastRecorded = '';
-  function recordHistory(t) {
+  async function recordHistory(t) {
     if (!t.url || t.url === lastRecorded || !/^https?:/.test(t.url)) return;
     lastRecorded = t.url;
-    api('api/browser/history', { method: 'POST', body: { url: t.url, title: t.title } }).catch(() => {});
+    // Encrypt the entry in the browser when a history key is available, so the server stores only
+    // ciphertext. Without a key (e.g. a passkey-only sign-in) fall back to plaintext.
+    const key = await historyKey(state.user.id).catch(() => null);
+    const body = key ? await encryptEntry(key, { url: t.url, title: t.title }).catch(() => null) : { url: t.url, title: t.title };
+    if (body) api('api/browser/history', { method: 'POST', body }).catch(() => {});
   }
   async function toggleHistory() {
     const open = viewport.querySelector('.side-panel');
@@ -301,9 +306,25 @@ export async function showBrowser(mount) {
     viewport.append(panel);
     const load = async () => {
       const { history } = await api('api/browser/history');
-      list.replaceChildren(...(history.length ? history.map((x) => h('div', { class: 'hist-item', onclick: () => { const c = cur(); if (c) go(c, x.url); panel.remove(); } },
-        h('div', {}, h('b', {}, x.title || new URL(x.url).hostname), h('small', {}, `${x.url} · ${fmtTime(x.ts)}`)),
-        h('button', { class: 'btn sm icon ghost', 'aria-label': 'Remove', onclick: async (e) => { e.stopPropagation(); await api(`api/browser/history/${x.id}`, { method: 'DELETE' }); load(); } }, icon('x'))))
+      const key = await historyKey(state.user.id).catch(() => null);
+      // Decrypt zero-knowledge entries client-side; rows we can't unlock (no password key on this
+      // device, or stored under an old key) are shown as a locked placeholder.
+      const items = [];
+      for (const x of history) {
+        let url = x.url, title = x.title, locked = false;
+        if (x.enc) {
+          if (key) { try { const d = await decryptEntry(key, x.iv, x.ct); url = d.url; title = d.title; } catch { locked = true; } }
+          else locked = true;
+        }
+        items.push({ id: x.id, ts: x.ts, url, title, locked });
+      }
+      const host = (u) => { try { return new URL(u).hostname; } catch { return u; } };
+      list.replaceChildren(...(items.length ? items.map((x) => x.locked
+        ? h('div', { class: 'hist-item' }, h('div', {}, h('b', {}, icon('lock'), ' Encrypted entry'), h('small', {}, `Sign in with your password to read · ${fmtTime(x.ts)}`)),
+          h('button', { class: 'btn sm icon ghost', 'aria-label': 'Remove', onclick: async (e) => { e.stopPropagation(); await api(`api/browser/history/${x.id}`, { method: 'DELETE' }); load(); } }, icon('x')))
+        : h('div', { class: 'hist-item', onclick: () => { const c = cur(); if (c) go(c, x.url); panel.remove(); } },
+          h('div', {}, h('b', {}, x.title || host(x.url)), h('small', {}, `${x.url} · ${fmtTime(x.ts)}`)),
+          h('button', { class: 'btn sm icon ghost', 'aria-label': 'Remove', onclick: async (e) => { e.stopPropagation(); await api(`api/browser/history/${x.id}`, { method: 'DELETE' }); load(); } }, icon('x'))))
         : [h('p', { class: 'faint', style: { padding: '8px' } }, 'No history. You can turn history off in Settings.')]));
     };
     load();

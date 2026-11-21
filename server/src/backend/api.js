@@ -1,5 +1,6 @@
 // REST API routes.
 import os from 'node:os';
+import crypto from 'node:crypto';
 import {
   generateRegistrationOptions, verifyRegistrationResponse,
   generateAuthenticationOptions, verifyAuthenticationResponse,
@@ -47,6 +48,13 @@ export function registerRoutes(router, ctx) {
     lastLogin: u.last_login, totpEnabled: !!u.totp_enabled, sessionHours: u.session_hours, searchEngine: u.search_engine,
     perms: u.is_owner ? Object.keys(PERMISSIONS) : u.perms,
   });
+  // Per-user, non-secret salt the browser uses to derive its zero-knowledge history key from the
+  // account password. Generated lazily for accounts created before the feature existed.
+  const encSaltB64 = (u) => {
+    let s = u.enc_salt;
+    if (!s) { s = crypto.randomBytes(16); db.prepare('UPDATE users SET enc_salt = ? WHERE id = ?').run(s, u.id); u.enc_salt = s; }
+    return Buffer.from(s).toString('base64');
+  };
   const allocation = cfg.allocation;
   const kickUser = (uid, reason) => {
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(uid);
@@ -152,7 +160,15 @@ export function registerRoutes(router, ctx) {
 
   router.get('/api/auth/me', (req, res) => {
     const u = needUser(req);
-    send(res, 200, { user: publicUser(u), limits: getLimits(u.id), version: VERSION });
+    send(res, 200, { user: publicUser(u), limits: getLimits(u.id), version: VERSION, encSalt: encSaltB64(u), wrappedKey: u.wrapped_key || null });
+  });
+  // Store the browser-wrapped history master key (opaque base64; the server cannot unwrap it).
+  router.put('/api/me/keybundle', async (req, res) => {
+    const u = needUser(req);
+    const b = await readJson(req);
+    const wrapped = b.wrapped === null ? null : str(b.wrapped, 'wrapped key', { max: 1024 });
+    db.prepare('UPDATE users SET wrapped_key = ? WHERE id = ?').run(wrapped, u.id);
+    send(res, 200, { ok: true });
   });
 
   router.post('/api/auth/password', async (req, res) => {
@@ -337,15 +353,24 @@ export function registerRoutes(router, ctx) {
   });
   router.get('/api/browser/history', (req, res) => {
     const u = needUser(req);
-    send(res, 200, { history: db.prepare('SELECT id, url, title, ts FROM history WHERE user_id = ? ORDER BY ts DESC LIMIT 300').all(u.id) });
+    send(res, 200, { history: db.prepare('SELECT id, enc, url, title, iv, ct, ts FROM history WHERE user_id = ? ORDER BY ts DESC LIMIT 300').all(u.id) });
   });
+  const b64 = /^[A-Za-z0-9+/]+={0,2}$/;
   router.post('/api/browser/history', async (req, res) => {
     const u = needUser(req);
     if (!settings.get(`user.${u.id}.saveHistory`, false)) return send(res, 200, { saved: false });
     const b = await readJson(req);
-    const url = str(b.url, 'URL', { max: 2048 });
-    if (!/^https?:\/\//i.test(url)) throw new HttpError(400, 'Only web addresses are recorded');
-    db.prepare('INSERT INTO history (user_id, url, title, ts) VALUES (?, ?, ?, ?)').run(u.id, url, String(b.title || '').slice(0, 200), Date.now());
+    // Zero-knowledge path: the client sends only an IV and ciphertext (AES-GCM of {url,title});
+    // the server stores them opaquely and never learns the destination.
+    if (b.ct !== undefined || b.iv !== undefined) {
+      const iv = str(b.iv, 'iv', { max: 32 }); const ct = str(b.ct, 'ct', { max: 4096 });
+      if (!b64.test(iv) || !b64.test(ct)) throw new HttpError(400, 'Encrypted history must be base64');
+      db.prepare('INSERT INTO history (user_id, url, enc, iv, ct, ts) VALUES (?, ?, 1, ?, ?, ?)').run(u.id, '', iv, ct, Date.now());
+    } else {
+      const url = str(b.url, 'URL', { max: 2048 });
+      if (!/^https?:\/\//i.test(url)) throw new HttpError(400, 'Only web addresses are recorded');
+      db.prepare('INSERT INTO history (user_id, url, title, enc, ts) VALUES (?, ?, ?, 0, ?)').run(u.id, url, String(b.title || '').slice(0, 200), Date.now());
+    }
     db.prepare('DELETE FROM history WHERE user_id = ? AND id NOT IN (SELECT id FROM history WHERE user_id = ? ORDER BY ts DESC LIMIT 1000)').run(u.id, u.id);
     send(res, 200, { saved: true });
   });
@@ -459,7 +484,10 @@ export function registerRoutes(router, ctx) {
     if (b.password !== undefined) {
       needPerm(req, 'users.manage');
       const problem = passwordProblems(b.password, target.username); if (problem) throw new HttpError(400, problem);
-      db.prepare('UPDATE users SET pw_hash = ?, failed_logins = 0, lock_until = NULL WHERE id = ?').run(await hashPassword(b.password), target.id);
+      // Clear the wrapped history key: an admin reset gives a new password, but nobody holds the
+      // old one, so the user's encrypted history can no longer be unwrapped (zero-knowledge by
+      // design). The client mints a fresh master key on next sign-in.
+      db.prepare('UPDATE users SET pw_hash = ?, wrapped_key = NULL, failed_logins = 0, lock_until = NULL WHERE id = ?').run(await hashPassword(b.password), target.id);
       db.prepare('DELETE FROM sessions WHERE user_id = ?').run(target.id);
       changes.password = 'reset';
     }

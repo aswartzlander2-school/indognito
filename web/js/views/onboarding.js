@@ -1,6 +1,7 @@
 // Onboarding (first Owner account + optional security) and sign-in.
 import { api, h, logo, pixelBackground, field, toast, state, passkeysPossible } from '../core.js';
 import { registerPasskey, setupTotp } from './security.js';
+import { unlockHistory } from '../crypto.js';
 
 const card = (...kids) => h('div', { class: 'center-card fade-in' }, ...kids);
 const steps = (n) => h('div', { class: 'steps', 'aria-label': `Step ${n} of 3` }, [1, 2, 3].map((i) => h('i', { class: i <= n ? 'on' : '' })));
@@ -8,6 +9,7 @@ const steps = (n) => h('div', { class: 'steps', 'aria-label': `Step ${n} of 3` }
 export function showOnboarding(mount) {
   const bg = pixelBackground();
   const holder = h('div', { class: 'screen' });
+  let ownerPassword = null; // held briefly to unlock zero-knowledge history on first sign-in
   mount(h('div', {}, bg, holder));
 
   const welcome = () => holder.replaceChildren(h('div', { class: 'center-card hero fade-in' },
@@ -28,6 +30,7 @@ export function showOnboarding(mount) {
       try {
         const r = await api('api/setup/owner', { method: 'POST', body: { username: user.value, password: pw.value } });
         state.user = r.user;
+        ownerPassword = pw.value;
         security();
       } catch (ex) { err.textContent = ex.message; next.disabled = false; }
     } },
@@ -61,6 +64,7 @@ export function showOnboarding(mount) {
     try {
       await api('api/workspace/stats'); // creates and measures the workspace
       const me = await api('api/auth/me');
+      if (ownerPassword) { await unlockHistory(me.user.id, ownerPassword, me).catch(() => {}); ownerPassword = null; }
       window.dispatchEvent(new CustomEvent('gnito:signedin', { detail: { user: me.user, limits: me.limits } }));
     } catch (e) { toast(e.message, true); }
   };
@@ -73,17 +77,20 @@ export function showLogin(mount) {
   const pw = h('input', { class: 'input', type: 'password', autocomplete: 'current-password', required: true });
   const err = h('div', { class: 'err', role: 'alert' });
   const done = (r) => window.dispatchEvent(new CustomEvent('gnito:signedin', { detail: { user: r.user, limits: null } }));
-  const afterLogin = async (r) => {
+  // `password`, when present (a password or password+TOTP sign-in), unlocks the user's
+  // zero-knowledge browsing history. A passkey sign-in has no password, so history stays locked.
+  const afterLogin = async (password) => {
     const me = await api('api/auth/me');
+    if (password) await unlockHistory(me.user.id, password, me).catch(() => {});
     window.dispatchEvent(new CustomEvent('gnito:signedin', { detail: { user: me.user, limits: me.limits } }));
   };
-  const totpStep = (challenge) => {
+  const totpStep = (challenge, password) => {
     const code = h('input', { class: 'input mono', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, placeholder: '123456' });
     const e2 = h('div', { class: 'err', role: 'alert' });
     holder.replaceChildren(card(logo(), h('h1', {}, 'Enter your code'), h('p', { class: 'lead' }, 'Open your authenticator app and type the 6-digit code for Indognito.'),
       h('form', { class: 'col', onsubmit: async (ev) => {
         ev.preventDefault();
-        try { await api('api/auth/totp', { method: 'POST', body: { challenge, code: code.value } }); await afterLogin(); }
+        try { await api('api/auth/totp', { method: 'POST', body: { challenge, code: code.value } }); await afterLogin(password); }
         catch (ex) { e2.textContent = ex.message; setTimeout(() => showLogin(mount), 2500); }
       } }, code, e2, h('button', { class: 'btn primary' }, 'Verify'))));
     code.focus();
@@ -102,8 +109,8 @@ export function showLogin(mount) {
       e.preventDefault(); err.textContent = '';
       try {
         const r = await api('api/auth/login', { method: 'POST', body: { username: user.value, password: pw.value } });
-        if (r.mfa === 'totp') return totpStep(r.challenge);
-        await afterLogin(r);
+        if (r.mfa === 'totp') return totpStep(r.challenge, pw.value);
+        await afterLogin(pw.value);
       } catch (ex) { err.textContent = ex.message; }
     } }, field('Username', user), field('Password', pw), err,
     h('div', { class: 'row' },
