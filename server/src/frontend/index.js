@@ -140,14 +140,27 @@ server.on('upgrade', (req, socket, head) => {
 });
 // Bind "::" as dual-stack (ipv6Only:false) so BOTH IPv4 and IPv6 work — important on Windows,
 // where `localhost` resolves to ::1 first, so an IPv4-only bind (127.0.0.1) refuses the connection.
+// If IPv6 is disabled in the kernel (common on minimal/VM Linux images), binding "::" fails; we then
+// fall back to IPv4 "0.0.0.0" instead of crash-looping and never answering.
 const fHost = cfg.bind.frontend;
-const listenOpts = fHost === '::' || fHost === '0.0.0.0'
-  ? { port: cfg.ports.frontend, host: '::', ipv6Only: false }
-  : { port: cfg.ports.frontend, host: fHost };
-server.listen(listenOpts, () => {
-  console.log(`[gnito] frontend v${VERSION} on ${tlsOn ? 'https' : 'http'}://${fHost === '::' ? 'localhost' : fHost}:${cfg.ports.frontend} → backend 127.0.0.1:${cfg.ports.backend}`);
+const port = cfg.ports.frontend;
+const wantsDual = fHost === '::' || fHost === '0.0.0.0';
+let triedIPv4Fallback = false;
+const logListening = (host) => console.log(`[gnito] frontend v${VERSION} on ${tlsOn ? 'https' : 'http'}://${host === '::' ? 'localhost' : host}:${port} → backend 127.0.0.1:${cfg.ports.backend}`);
+function listen(host) {
+  server.listen(host === '::' ? { port, host: '::', ipv6Only: false } : { port, host }, () => logListening(host));
+}
+server.on('error', (e) => {
+  if (wantsDual && !triedIPv4Fallback && ['EADDRNOTAVAIL', 'EAFNOSUPPORT', 'EINVAL', 'EPROTONOSUPPORT'].includes(e.code)) {
+    triedIPv4Fallback = true;
+    console.error(`[gnito] frontend: could not bind IPv6 dual-stack :: (${e.code}); falling back to 0.0.0.0`);
+    try { server.close(); } catch { /* not listening */ }
+    return listen('0.0.0.0');
+  }
+  console.error('[gnito] frontend error:', e.message);
+  process.exit(1);
 });
-server.on('error', (e) => { console.error('[gnito] frontend error:', e.message); process.exit(1); });
+listen(wantsDual ? '::' : fHost);
 // Shut down cleanly on a real stop signal (the supervisor sends SIGTERM); ignore stray console
 // control events (SIGINT/SIGHUP/SIGBREAK) so a Windows background service isn't killed spuriously.
 process.on('SIGTERM', () => { server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 1500).unref(); });

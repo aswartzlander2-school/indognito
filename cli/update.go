@@ -182,6 +182,24 @@ func cmdUpdate(args []string) int {
 	}
 	fmt.Printf("Updating Indognito %s → %s%s%s…\n", Version, bold, latest, reset)
 
+	// System-wide (admin) installs live in root-owned directories (e.g. /opt/indognito). If we are
+	// not root, re-run the whole update under sudo — passing the state file so the elevated process
+	// finds the install — so both the CLI binary and the app can be written in one go.
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
+		if inst, e := loadInstall(); e == nil && inst.Mode == "admin" {
+			if sudo, e2 := exec.LookPath("sudo"); e2 == nil {
+				self, _ := os.Executable()
+				fmt.Printf("%sThis is a system-wide install; re-running the update with administrator rights…%s\n", dim, reset)
+				c := exec.Command(sudo, "env", "GNITO_STATE_FILE="+stateFile(), self, "update")
+				c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
+				if err := c.Run(); err != nil {
+					return 1
+				}
+				return 0
+			}
+		}
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		fmt.Printf("%s✗ Cannot find this executable: %v%s\n", red, err, reset)
