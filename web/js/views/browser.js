@@ -11,8 +11,8 @@ const ENGINES = {
   bing: ['Bing', 'https://www.bing.com/search?q=%s'], google: ['Google', 'https://www.google.com/search?q=%s'],
 };
 
-let engine = null; // { scramjet, conn, ticket } — the running engine for the current ticket
-let enginePromise = null; // memoized setup for the parts that only need to happen once per page lifetime
+let engine = null; // { controller, ticket } — the running Scramjet controller for the current ticket
+let swPromise = null; // registers the service worker + loads the engine scripts exactly once per page
 
 function toUrl(input) {
   const s = input.trim();
@@ -23,79 +23,59 @@ function toUrl(input) {
   return tpl.replace('%s', encodeURIComponent(s));
 }
 
-// A '$scramjet' database created without its object stores (e.g. opened by a worker before the
-// controller initialised it) can never be upgraded, so drop it and let the controller recreate it.
-async function repairEngineDb() {
-  if (!(await indexedDB.databases()).some((d) => d.name === '$scramjet')) return; // opening would create it empty
-  const db = await new Promise((res) => { const r = indexedDB.open('$scramjet'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); });
-  if (!db) return;
-  const ok = db.objectStoreNames.contains('config') && db.objectStoreNames.contains('cookies');
-  db.close();
-  if (ok) return;
-  const done = await new Promise((res) => {
-    const r = indexedDB.deleteDatabase('$scramjet');
-    r.onsuccess = () => res(true); r.onerror = () => res(false);
-    setTimeout(() => res(false), 2500); // blocked by the service worker's open connection
-  });
-  if (!done) {
-    (await navigator.serviceWorker.getRegistration(BASE))?.unregister();
-    throw new Error('The browser engine storage had to be reset. Close other Indognito tabs, then reload this page.');
-  }
-}
-
-// Sets up the controller, the service worker and the bare-mux connection exactly once per page
-// lifetime. Re-registering and re-activating the service worker on every visit to the Browser
-// view re-opens a startup race in the SW's client/port handshake (the SW asks window clients for
-// a bare-mux MessagePort via clients.matchAll(), which is only reliable once the SW has settled
-// into actually controlling the page) — so these parts are memoized and only the per-session wisp
-// transport is swapped out when a new browser-session ticket is granted.
-function setupEngineOnce() {
-  if (enginePromise) return enginePromise;
-  enginePromise = (async () => {
+// Load the Scramjet core (sets the $scramjet global) and the controller API (sets $scramjetController),
+// then register the service worker — once per page lifetime. Returns the active ServiceWorker, which
+// the controller drives over a MessagePort.
+function setupSWOnce() {
+  if (swPromise) return swPromise;
+  swPromise = (async () => {
     if (!('serviceWorker' in navigator)) throw new Error('This browser does not support service workers. Indognito needs HTTPS (or localhost) for its browser.');
-    // Pull in the proxy engine only now that the Browser is actually opened.
-    await loadScript('vendor/scramjet/scramjet.all.js');
-    await loadScript('vendor/baremux/index.js');
-    // Order matters: the controller must create its IndexedDB stores before the service worker opens the database.
-    await repairEngineDb();
-    const { ScramjetController } = $scramjetLoadController();
-    const scramjet = new ScramjetController({
-      prefix: BASE + 'service/',
-      files: { wasm: BASE + 'vendor/scramjet/scramjet.wasm.wasm', all: BASE + 'vendor/scramjet/scramjet.all.js', sync: BASE + 'vendor/scramjet/scramjet.sync.js' },
-    });
-    await scramjet.init();
+    await loadScript('vendor/scramjet/scramjet.js');
+    await loadScript('vendor/controller/controller.api.js');
     await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE });
     await navigator.serviceWorker.ready;
+    // The controller↔SW handshake only works with the worker that actually CONTROLS this page
+    // (postMessage to a merely-"active" registration can land on a different instance). Wait for
+    // control; if it doesn't arrive (first registration ever), reload once so the fresh load is
+    // controlled from the start — this happens at most once per device.
     if (!navigator.serviceWorker.controller) {
-      // First registration ever for this tab: the page is not controlled yet; wait for clients.claim().
-      await new Promise((r) => { navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }); setTimeout(r, 3000); });
-      // The SW's own client/port bookkeeping needs a moment to settle right after it starts
-      // controlling the page — this margin is paid once, not on every Browser visit.
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => { navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }); setTimeout(r, 4000); });
     }
-    // scramjet.init() posts its config to the service worker only if the SW was already controlling
-    // the page at that moment — which it is NOT on the first ever load. Without the config the SW
-    // crashes on `config.prefix` the first time it proxies a request. Re-push the config now that the
-    // SW is definitely controlling, so it is populated regardless of first-load ordering.
-    await scramjet.modifyConfig({});
-    const v = encodeURIComponent(state.version || '1');
-    const conn = new BareMux.BareMuxConnection(`${BASE}vendor/baremux/worker.js?v=${v}`);
-    return { scramjet, conn };
-  })().catch((e) => { enginePromise = null; throw e; }); // let a failed setup be retried
-  return enginePromise;
+    if (!navigator.serviceWorker.controller) {
+      if (!sessionStorage.getItem('gnito.swReloaded')) { sessionStorage.setItem('gnito.swReloaded', '1'); location.reload(); await new Promise(() => {}); }
+      throw new Error('The browser engine could not take control of this page. Reload and try again.');
+    }
+    sessionStorage.removeItem('gnito.swReloaded');
+    return navigator.serviceWorker.controller;
+  })().catch((e) => { swPromise = null; throw e; }); // let a failed setup be retried
+  return swPromise;
 }
 
-// Client-side transports. Both perform TLS to each website *inside* the page, so this server's
-// relay only ever sees encrypted bytes for https sites — the choice is about compatibility and
-// performance, not disguising traffic. The admin picks one; the server tells us which per session.
+// Client-side transports. Both perform TLS to each website *inside* the page, so this server's relay
+// only ever sees encrypted bytes for https sites — the choice is about compatibility and performance,
+// not disguising traffic. The admin or the user picks one; the server tells us which per session.
 const TRANSPORTS = { epoxy: 'vendor/epoxy/index.mjs', libcurl: 'vendor/libcurl/index.mjs' };
 
 async function startEngine(ticket, transport = 'epoxy') {
-  const { scramjet, conn } = await setupEngineOnce();
+  const sw = await setupSWOnce();
   const wisp = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}wisp/${ticket}/`;
   const mod = TRANSPORTS[transport] || TRANSPORTS.epoxy;
-  await conn.setTransport(`${BASE}${mod}?v=${encodeURIComponent(state.version || '1')}`, [{ wisp }]);
-  return { scramjet, conn, ticket };
+  const v = encodeURIComponent(state.version || '1');
+  const TransportClass = (await import(`${BASE}${mod}?v=${v}`)).default;
+  const tp = new TransportClass({ wisp });
+  const { Controller } = $scramjetController;
+  const controller = new Controller({
+    serviceworker: sw,
+    transport: tp,
+    config: {
+      prefix: BASE + 'service/',
+      scramjetPath: BASE + 'vendor/scramjet/scramjet.js',
+      injectPath: BASE + 'vendor/controller/controller.inject.js',
+      wasmPath: BASE + 'vendor/scramjet/scramjet.wasm',
+    },
+  });
+  await controller.wait();
+  return { controller, ticket };
 }
 
 export async function showBrowser(mount) {
@@ -130,15 +110,17 @@ export async function showBrowser(mount) {
     h('div', { class: 'strip-end' }, statusDot, userMenu()));
   const view = h('div', { class: 'shell' }, h('div', { class: 'browser', style: { flex: 1, minHeight: 0 } }, top, navbar, loadbar, viewport));
 
-  let tabs = [], active = null, hb = null, poll = null, sessionId = null, alive = true, nextId = 1;
+  let tabs = [], active = null, hb = null, poll = null, syncTimer = null, sessionId = null, alive = true, nextId = 1;
   const cur = () => tabs.find((t) => t.id === active);
 
   const release = () => {
-    alive = false; clearInterval(hb); clearTimeout(poll);
+    alive = false; clearInterval(hb); clearTimeout(poll); clearInterval(syncTimer);
     if (sessionId) api(`api/browser/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {});
     if (engine) { engine = null; }
   };
   mount(view, release);
+  // Catch in-page (SPA) navigations the iframe 'load' event misses.
+  syncTimer = setInterval(() => { const c = cur(); if (c && engine) syncFrame(c); }, 1200);
 
   // ----- session / queue -----
   const overlay = (node) => { viewport.querySelector('.queue')?.remove(); if (node) viewport.append(node); };
@@ -234,48 +216,46 @@ export async function showBrowser(mount) {
     }), h('button', { class: 'tab-add', 'aria-label': 'New tab', title: 'New tab', onclick: () => newTab() }, '+'));
   }
 
-  // The tab favicon is always loaded THROUGH this server's proxy (same-origin), never fetched
-  // directly from the site — otherwise the page's own CSP (img-src 'self') blocks it and the icon
-  // breaks. We read the <link rel="icon"> from the proxied document when we can, resolve it against
-  // the real page URL, and route it through Scramjet; otherwise we fall back to /favicon.ico.
-  function proxify(realUrl) {
-    try { return engine.scramjet.encodeUrl(realUrl); } catch { return null; }
-  }
+  // The proxied page is served from this origin, so its <link rel="icon"> href is already a
+  // same-origin (proxied) URL that loads through the service worker — use it directly. That keeps the
+  // tab favicon within the page's CSP (img-src 'self') instead of hitting the site directly.
   function readFavicon(t) {
-    if (!t.url || !engine) return false;
-    let real = null;
     try {
       const doc = t.iframe.contentDocument;
       const link = doc?.querySelector('link[rel~="icon" i], link[rel~="shortcut" i]');
-      const raw = link?.getAttribute('href');
-      if (raw) {
-        // If the proxied document already rewrote the href to a same-origin proxied URL, use it as-is;
-        // otherwise resolve the raw value against the page's real URL so we can re-encode it.
-        real = /^https?:\/\//i.test(raw) && raw.startsWith(location.origin) ? '__proxied__' + raw : new URL(raw, t.url).href;
-      }
-    } catch { /* cross-origin under proxy — fall back to /favicon.ico */ }
-    let next;
-    if (real && real.startsWith('__proxied__')) next = real.slice('__proxied__'.length);
-    else next = proxify(real || new URL('/favicon.ico', t.url).href);
-    if (next && next !== t.favicon) { t.favicon = next; return true; }
+      const href = link?.href || null;
+      if (href !== t.favicon) { t.favicon = href; return true; }
+    } catch { /* cross-origin edge under proxy */ }
     return false;
+  }
+
+  // Scramjet 2.x has no urlchange event, but the proxied iframe is same-origin, so we read its real
+  // location (decoded) and title on load and on a short poll (to catch in-page SPA navigations).
+  function syncFrame(t) {
+    try {
+      const href = t.iframe.contentWindow?.location?.href;
+      if (!href) return;
+      let real = href;
+      try { if (window.$scramjet && typeof $scramjet.unrewriteUrl === 'function') real = $scramjet.unrewriteUrl(href) || href; } catch { /* keep href */ }
+      if (real && /^https?:/i.test(real) && real !== t.url) {
+        t.url = real; t.favicon = null;
+        if (t.id === active) { addr.value = real; setSecure(real); }
+        recordHistory(t); renderTabs();
+      }
+      const title = t.iframe.contentDocument?.title;
+      if (title && title !== t.title) { t.title = title; renderTabs(); }
+    } catch { /* cross-origin edge under proxy */ }
   }
 
   function newTab(url) {
     if (!engine) return;
     const iframe = h('iframe', { title: 'Web page', allow: 'fullscreen; clipboard-write', referrerpolicy: 'no-referrer' });
-    const frame = engine.scramjet.createFrame(iframe);
-    const t = { id: nextId++, frame, iframe, url: null, title: '', favicon: null };
-    frame.addEventListener('urlchange', (e) => {
-      t.url = e.url; t.favicon = null; t.loading = true;
-      if (t.id === active) { addr.value = e.url; setSecure(e.url); setLoading(true); }
-      recordHistory(t);
-      renderTabs();
-    });
+    const frame = engine.controller.createFrame(iframe);
+    const t = { id: nextId++, frame, iframe, url: null, title: '', favicon: null, loading: false };
     iframe.addEventListener('load', () => {
-      try { t.title = iframe.contentDocument?.title || t.title; } catch { /* cross-origin */ }
       t.loading = false;
       if (t.id === active) setLoading(false);
+      syncFrame(t);
       readFavicon(t);
       renderTabs(); recordHistory(t);
     });

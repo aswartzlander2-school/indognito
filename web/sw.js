@@ -1,6 +1,15 @@
 // Indognito service worker (Scramjet 2.x). Loads the Scramjet core rewriter and the Scramjet
 // controller's service-worker half, then lets the controller route proxied traffic. The controller
 // (in the page) hands this worker its config, wasm and transport at runtime over a MessagePort.
+
+// Scramjet 2.1.0's core captures `URL.createObjectURL.bind(...)` at load, but that API doesn't exist
+// in a ServiceWorker, so the import would throw and the worker would never evaluate. Stub it before
+// importing — the SW routing path never creates blob URLs (that happens on the window side).
+if (typeof URL.createObjectURL !== 'function') {
+  URL.createObjectURL = () => { throw new Error('URL.createObjectURL is not available in a service worker'); };
+  URL.revokeObjectURL = () => {};
+}
+
 importScripts('vendor/scramjet/scramjet.js', 'vendor/controller/controller.sw.js', 'js/errors-catalog.js');
 
 const { shouldRoute, route } = $scramjetController;
