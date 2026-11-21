@@ -100,11 +100,24 @@ export async function showBrowser(mount) {
   const addr = h('input', { class: 'input grow', placeholder: `Search with ${(ENGINES[state.user.searchEngine] || ENGINES.duckduckgo)[0]} or type an address`, 'aria-label': 'Address', spellcheck: 'false', autocomplete: 'off' });
   const viewport = h('div', { class: 'viewport' });
   const btn = (ic, label, fn) => h('button', { class: 'btn icon sm ghost', 'aria-label': label, title: label, onclick: fn }, icon(ic));
+  // Connection indicator inside the address bar: a lock for https (end-to-end encrypted to the
+  // site), a globe otherwise. Honest — it reflects the real scheme, not the proxy hop.
+  const secure = h('span', { class: 'secure none', 'aria-hidden': 'true' }, icon('globe'));
+  const setSecure = (url) => {
+    const https = /^https:/i.test(url || '');
+    secure.replaceChildren(icon(https ? 'lock' : 'globe'));
+    secure.className = 'secure ' + (https ? 'ok' : url ? 'warn' : 'none');
+    secure.title = https ? 'Secure — encrypted end-to-end to this site' : url ? 'Not secure (no https)' : '';
+  };
+  const addrForm = h('form', { class: 'addr-form', onsubmit: (e) => { e.preventDefault(); navigate(addr.value); } },
+    h('div', { class: 'addr-wrap' }, secure, addr));
   const navbar = h('div', { class: 'navbar' },
     btn('back', 'Back', () => cur()?.frame?.back()), btn('fwd', 'Forward', () => cur()?.frame?.forward()),
     btn('reload', 'Reload', () => cur()?.frame?.reload()),
-    h('form', { onsubmit: (e) => { e.preventDefault(); navigate(addr.value); } }, addr),
-    btn('history', 'History', () => toggleHistory()));
+    addrForm, btn('history', 'History', () => toggleHistory()));
+  // Thin indeterminate loading bar under the toolbar, shown while the active tab is navigating.
+  const loadbar = h('div', { class: 'loadbar', 'aria-hidden': 'true' });
+  const setLoading = (on) => loadbar.classList.toggle('on', !!on);
   // Session status: a small dot with a text tooltip instead of a separate header bar.
   const statusDot = h('span', { class: 'dot-status', role: 'status', title: 'Connecting…', 'aria-label': 'Connecting…' });
   const setStatus = (kind, text) => { statusDot.className = 'dot-status ' + kind; statusDot.title = text; statusDot.setAttribute('aria-label', text); };
@@ -112,7 +125,7 @@ export async function showBrowser(mount) {
     h('button', { class: 'btn icon sm ghost', 'aria-label': 'Home', title: 'Home', onclick: () => { location.hash = '#/home'; } }, icon('home')),
     tabsEl,
     h('div', { class: 'strip-end' }, statusDot, userMenu()));
-  const view = h('div', { class: 'shell' }, h('div', { class: 'browser', style: { flex: 1, minHeight: 0 } }, top, navbar, viewport));
+  const view = h('div', { class: 'shell' }, h('div', { class: 'browser', style: { flex: 1, minHeight: 0 } }, top, navbar, loadbar, viewport));
 
   let tabs = [], active = null, hb = null, poll = null, sessionId = null, alive = true, nextId = 1;
   const cur = () => tabs.find((t) => t.id === active);
@@ -181,6 +194,7 @@ export async function showBrowser(mount) {
   // ----- tabs -----
   function favNode(t) {
     const label = t.title || (t.url ? new URL(t.url).hostname : 'New tab');
+    if (t.loading) return h('span', { class: 'tab-spin', 'aria-label': 'Loading' });
     if (t.favicon) {
       const img = h('img', { class: 'fav', src: t.favicon, alt: '', width: 18, height: 18 });
       img.addEventListener('error', () => { t.favicon = null; renderTabs(); }, { once: true });
@@ -217,12 +231,15 @@ export async function showBrowser(mount) {
     const frame = engine.scramjet.createFrame(iframe);
     const t = { id: nextId++, frame, iframe, url: null, title: '', favicon: null };
     frame.addEventListener('urlchange', (e) => {
-      t.url = e.url; t.favicon = null; if (t.id === active) addr.value = e.url;
+      t.url = e.url; t.favicon = null; t.loading = true;
+      if (t.id === active) { addr.value = e.url; setSecure(e.url); setLoading(true); }
       recordHistory(t);
       renderTabs();
     });
     iframe.addEventListener('load', () => {
       try { t.title = iframe.contentDocument?.title || t.title; } catch { /* cross-origin */ }
+      t.loading = false;
+      if (t.id === active) setLoading(false);
       readFavicon(t);
       renderTabs(); recordHistory(t);
     });
@@ -235,7 +252,9 @@ export async function showBrowser(mount) {
   function select(id) {
     active = id;
     for (const t of tabs) { t.iframe.style.display = t.id === id ? '' : 'none'; t.ntp && (t.ntp.style.display = t.id === id ? '' : 'none'); }
-    addr.value = cur()?.url || '';
+    const c = cur();
+    addr.value = c?.url || '';
+    setSecure(c?.url); setLoading(c?.loading);
     renderTabs();
   }
 
@@ -250,8 +269,8 @@ export async function showBrowser(mount) {
 
   function go(t, url) {
     t.ntp?.remove(); t.ntp = null;
-    t.url = url; t.title = '';
-    addr.value = url;
+    t.url = url; t.title = ''; t.loading = true;
+    if (t.id === active) { addr.value = url; setSecure(url); setLoading(true); }
     t.frame.go(url);
     renderTabs();
   }
@@ -267,14 +286,17 @@ export async function showBrowser(mount) {
     t.ntp?.remove();
     const search = h('input', { class: 'input', placeholder: `Search with ${(ENGINES[state.user.searchEngine] || ENGINES.duckduckgo)[0]} or type an address`, 'aria-label': 'Search or address', spellcheck: 'false', autocomplete: 'off' });
     const groups = h('div', { class: 'newtab-groups' });
+    const hour = new Date().getHours();
+    const greeting = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     const card = h('div', { class: 'center-card newtab-card fade-in' },
-      logo(),
+      h('div', { class: 'newtab-head' }, logo('lg'),
+        h('h2', { class: 'newtab-greet' }, `${greeting}${state.user?.username ? ', ' + state.user.username : ''}`)),
       h('form', { class: 'newtab-search', onsubmit: (e) => { e.preventDefault(); const u = toUrl(search.value); if (u) go(t, u); } }, icon('search'), search),
       groups,
       h('p', { class: 'note' }, 'Pages load through this Indognito server. Secure (https) sites stay encrypted end-to-end. Your administrator’s network policy applies.'));
     t.ntp = h('div', { class: 'newtab' }, pixelBackground(28, 16), card);
     viewport.append(t.ntp);
-    t.url = null; addr.value = ''; renderTabs();
+    t.url = null; t.loading = false; addr.value = ''; setSecure(null); setLoading(false); renderTabs();
     setTimeout(() => search.focus(), 30);
     try {
       const { apps } = await api('api/apps');
