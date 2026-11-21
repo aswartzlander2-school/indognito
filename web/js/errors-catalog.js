@@ -37,6 +37,11 @@
       text: 'This tab lost its connection to the Indognito server, usually because the session was idle or an administrator released it.',
       tips: ['Close the browser and open it again to get a new session.'],
     },
+    'relay-unreachable': {
+      title: 'This server’s browsing relay can’t be reached',
+      text: 'To load pages, your browser opens a WebSocket to this Indognito server’s relay. That connection didn’t go through — the relay may be down, or a network or firewall between you and this server is blocking the WebSocket. Nothing can load until it’s reachable.',
+      tips: ['Reload to try again.', 'On a restricted network, the WebSocket to this server may be blocked — try a different network.', 'If it keeps failing, ask your Indognito administrator whether the server and its relay are running.'],
+    },
     'network': {
       title: 'The page could not be loaded',
       text: 'Something went wrong while fetching this page through the Indognito server.',
