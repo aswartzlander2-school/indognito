@@ -18,8 +18,10 @@ const DEFAULTS = {
   ports: { backend: 7710, frontend: 7711 },
   bind: { backend: '127.0.0.1', frontend: '::' },
   allocation: { ramMb: 3072, storageMb: 8192, cpuCores: 1, cpuPercent: 100 },
-  // runtime.driver: 'auto' prefers an isolated microVM (if microvm.url is set), then the bubblewrap
-  // sandbox, then a plain process. microvm needs a MicroVM-Playground server with a QEMU backend and
+  // runtime.driver: 'auto' prefers an isolated microVM (if microvm.url is set), else a bubblewrap
+  // sandbox. It never falls back to an unsandboxed host shell — if neither is available the terminal
+  // is refused (the Owner can set runtime.allowUnsandboxed to override). microvm needs a
+  // MicroVM-Playground server with a firecracker or QEMU backend and
   // SSH enabled in the guest image; guestUser/guestPassword are that image's login (for file access).
   runtime: { driver: 'auto', microvm: { url: '', user: 'admin', password: '', guestUser: 'gnito', guestPassword: '', image: 'default', memMib: 1024, vcpus: 1, diskGb: 8, ttl: 'never' } },
   tls: { mode: 'off', cert: '', key: '' },

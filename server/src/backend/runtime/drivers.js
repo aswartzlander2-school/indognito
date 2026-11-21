@@ -46,7 +46,7 @@ function sandboxArgs(ws, opts) {
     '--setenv', 'GNITO_MACHINE', '1', // marks this shell as being inside an Indognito machine
     '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin', '--setenv', 'TERM', 'xterm-256color',
     '--setenv', 'LANG', process.env.LANG || 'C.UTF-8', '--setenv', 'SHELL', '/bin/bash',
-    '--setenv', 'PS1', '\\[\\e[1;31m\\]gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ');
+    '--setenv', 'PS1', '\\[\\e[1;31m\\]user@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ');
   a.push('/bin/bash', '--noprofile', '--norc', '-i');
   return a;
 }
@@ -70,11 +70,11 @@ export function detectDrivers(cfg) {
     if (r.status === 0) out.limits = 'cgroup';
   }
   const want = cfg.runtime?.driver || 'auto';
-  // Terminals always run in an isolated Linux microVM (MicroVM-Playground), regardless of the host
-  // OS — never a host shell. The sandbox/process drivers exist only as an explicit opt-in override.
-  out.selected = want === 'auto' ? 'microvm' : want;
-  if (out.selected === 'sandbox' && !out.sandbox) out.selected = 'process';
-  if (out.selected === 'microvm' && !out.microvm) out.selected = out.sandbox ? 'sandbox' : 'process';
+  // Terminals must run isolated: a MicroVM-Playground microVM (firecracker/QEMU; any host OS) when
+  // one is configured, otherwise a bubblewrap sandbox on Linux. "auto" NEVER silently downgrades to
+  // an unsandboxed host shell — if neither is available the terminal is refused (see allowedFor).
+  // The plain 'process' driver is only reachable as an explicit, Owner-gated override.
+  out.selected = want === 'auto' ? (out.microvm ? 'microvm' : 'sandbox') : want;
   probe = out;
   return out;
 }
@@ -91,14 +91,16 @@ export function spawnLocal(kind, { ws, cols, rows, limits, network, probe: p }) 
   if (!helper) throw new Error('The gnito PTY helper is missing (expected bin/gnito in the install directory).');
   let argv;
   let env;
-  if (kind === 'sandbox') {
+  if (kind === 'sandbox' && p.sandbox) {
     argv = ['bwrap', ...sandboxArgs(ws, { network })];
     env = { PATH: process.env.PATH };
   } else {
+    // Unsandboxed host shell — only reached as an explicit, Owner-allowed override (allowedFor
+    // refuses it otherwise), e.g. a dev host with no microVM and no working bubblewrap.
     const sh = defaultShell();
     argv = [sh.cmd, ...sh.args];
     env = { ...cleanEnv(), HOME: ws, USERPROFILE: ws, TERM: 'xterm-256color', GNITO_WORKSPACE: ws, GNITO_MACHINE: '1',
-      PS1: '\\[\\e[1;31m\\]gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ' };
+      PS1: '\\[\\e[1;31m\\]user@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ' };
   }
   if (p.limits === 'cgroup' && limits) {
     argv = ['systemd-run', '--user', '--scope', '--quiet', '-p', `MemoryMax=${limits.ram_mb}M`,

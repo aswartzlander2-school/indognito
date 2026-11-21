@@ -18,14 +18,22 @@ export class Terminals extends EventEmitter {
 
   allowedFor(user) {
     const p = this.probe();
+    const allowUnsandboxed = this.settings.get('runtime.allowUnsandboxed', false);
     if (p.selected === 'microvm') {
       if (!this.machines?.enabled) return { ok: false, reason: 'Terminals run in an isolated Linux microVM. The Owner needs to connect a MicroVM-Playground server first (set runtime.microvm.url in the server config).' };
       return { ok: true };
     }
-    // Explicit sandbox/process override (advanced; not isolated like the microVM).
     if (!p.pty) return { ok: false, reason: 'The PTY helper is missing from this installation.' };
-    if (p.selected === 'process' && !user.is_owner && !this.settings.get('runtime.allowUnsandboxed', false)) {
-      return { ok: false, reason: 'Terminals for other accounts need sandboxing or a microVM. The Owner can connect a MicroVM-Playground server, or allow unsandboxed terminals in Admin → System.' };
+    if (p.selected === 'sandbox') {
+      // Isolated when bubblewrap works. Otherwise the terminal would be unsandboxed, which is only
+      // allowed if the Owner explicitly turned it on — never silently.
+      if (p.sandbox) return { ok: true };
+      if (allowUnsandboxed) return { ok: true };
+      return { ok: false, reason: `Terminals must be isolated, but neither a microVM nor a bubblewrap sandbox is available on this host${p.sandboxReason ? ` (${p.sandboxReason})` : ''}. Connect a MicroVM-Playground server (runtime.microvm.url), or explicitly allow unsandboxed terminals in Admin → System.` };
+    }
+    // Explicit 'process' driver — unsandboxed; Owner-gated.
+    if (!user.is_owner && !allowUnsandboxed) {
+      return { ok: false, reason: 'Unsandboxed terminals are disabled. The Owner can connect a MicroVM-Playground server, or allow unsandboxed terminals in Admin → System.' };
     }
     return { ok: true };
   }

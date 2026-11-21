@@ -7,8 +7,8 @@
 // (console), the File Explorer (SFTP file ops) and the Browser (download → write) all point at the
 // SAME VM, which is how they stay linked.
 //
-// Requires a running MicroVM-Playground server with a QEMU backend and SSH enabled in the guest
-// image. Configure it in data/config.json under runtime.microvm:
+// Requires a running MicroVM-Playground server with a firecracker or QEMU backend and SSH enabled in
+// the guest image. Configure it in data/config.json under runtime.microvm:
 //   { "url": "https://microvm.example", "password": "...",
 //     "guestUser": "gnito", "guestPassword": "...", "image": "default",
 //     "memMib": 1024, "vcpus": 1, "diskGb": 8, "ttl": "never" }
