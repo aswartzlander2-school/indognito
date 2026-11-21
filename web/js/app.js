@@ -2,12 +2,6 @@
 import { api, h, state, toast } from './core.js';
 import { showInit } from './views/init.js';
 import { showOnboarding, showLogin } from './views/onboarding.js';
-import { showHome } from './views/home.js';
-import { showBrowser } from './views/browser.js';
-import { showTerminal } from './views/terminal.js';
-import { showFiles } from './views/files.js';
-import { showAdmin } from './views/admin.js';
-import { showSettings } from './views/settings.js';
 
 const root = document.getElementById('app');
 let cleanup = null;
@@ -18,18 +12,36 @@ export function mount(node, onLeave) {
   root.replaceChildren(node);
 }
 
+// Each view (and its own dependencies) is a separate module loaded only when first navigated to,
+// so the sign-in/home path never downloads the admin, files, terminal or browser code up front.
 const routes = {
-  home: showHome, browser: showBrowser, terminal: showTerminal, files: showFiles,
-  admin: showAdmin, settings: showSettings, workspace: showHome, apps: showHome,
+  home: () => import('./views/home.js').then((m) => m.showHome),
+  browser: () => import('./views/browser.js').then((m) => m.showBrowser),
+  terminal: () => import('./views/terminal.js').then((m) => m.showTerminal),
+  files: () => import('./views/files.js').then((m) => m.showFiles),
+  admin: () => import('./views/admin.js').then((m) => m.showAdmin),
+  settings: () => import('./views/settings.js').then((m) => m.showSettings),
+  workspace: () => import('./views/home.js').then((m) => m.showHome),
+  apps: () => import('./views/home.js').then((m) => m.showHome),
 };
 
 export function go(route) { if (location.hash !== '#/' + route) location.hash = '#/' + route; else route_(); }
 
+// Once the user is in, warm the common view modules during idle time so navigating to them is
+// instant — without adding their weight to the initial page load.
+let prefetched = false;
+function prefetchViews() {
+  if (prefetched) return; prefetched = true;
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500));
+  idle(() => { for (const n of ['browser', 'terminal', 'files', 'settings']) routes[n]?.().catch(() => {}); });
+}
+
 async function route_() {
   if (!state.user) return;
   const [name, ...rest] = location.hash.replace(/^#\/?/, '').split('/');
-  const view = routes[name] || showHome;
-  try { await view(mount, rest.join('/')); } catch (e) { console.error(e); toast(e.message, true); }
+  const loader = routes[name] || routes.home;
+  try { const view = await loader(); await view(mount, rest.join('/')); }
+  catch (e) { console.error(e); toast(e.message, true); }
 }
 
 async function boot() {
@@ -52,11 +64,12 @@ async function boot() {
   } catch { return showLogin(mount); }
   if (!location.hash || location.hash === '#/') location.hash = '#/home';
   route_();
+  prefetchViews();
 }
 
 window.addEventListener('hashchange', route_);
 window.addEventListener('gnito:signedout', () => { if (state.user) { state.user = null; toast('You were signed out.', true); showLogin(mount); } });
-window.addEventListener('gnito:signedin', (e) => { Object.assign(state, e.detail); location.hash = '#/home'; route_(); });
+window.addEventListener('gnito:signedin', (e) => { Object.assign(state, e.detail); location.hash = '#/home'; route_(); prefetchViews(); });
 
 // Arrow-key focus movement between tiles (TV-style navigation).
 document.addEventListener('keydown', (e) => {

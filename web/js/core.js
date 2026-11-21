@@ -19,6 +19,32 @@ export function h(tag, attrs = {}, ...kids) {
   return el;
 }
 
+// On-demand loader for the heavy UMD engine libraries so they stay off the initial page load.
+// Each script/stylesheet is fetched at most once; callers await it before using its globals.
+const _assets = new Map();
+export function loadScript(rel) {
+  if (_assets.has(rel)) return _assets.get(rel);
+  const p = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = BASE + rel; s.async = false; // preserve execution order for dependent scripts
+    s.onload = () => res();
+    s.onerror = () => { _assets.delete(rel); rej(new Error('Failed to load ' + rel)); };
+    document.head.append(s);
+  });
+  _assets.set(rel, p); return p;
+}
+export function loadStyle(rel) {
+  const key = 'css:' + rel;
+  if (_assets.has(key)) return _assets.get(key);
+  const p = new Promise((res, rej) => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = BASE + rel;
+    l.onload = () => res(); l.onerror = () => rej(new Error('Failed to load ' + rel));
+    document.head.append(l);
+  });
+  _assets.set(key, p); return p;
+}
+
 export class ApiError extends Error { constructor(status, msg, body) { super(msg); this.status = status; this.body = body; } }
 
 export async function api(path, { method = 'GET', body, raw, headers = {} } = {}) {

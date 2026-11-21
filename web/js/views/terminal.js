@@ -1,6 +1,12 @@
 // Terminal: xterm.js connected over a websocket to a real shell in the user's workspace.
-import { api, h, icon, BASE, toast, fmtBytes, confirmBox } from '../core.js';
+import { api, h, icon, BASE, toast, fmtBytes, confirmBox, loadScript, loadStyle } from '../core.js';
 import { appHeader } from './shell.js';
+
+// xterm and its fit addon (~480 KB) load only when the Terminal view is opened.
+const termLibs = () => Promise.all([
+  loadStyle('vendor/xterm/css/xterm.css'),
+  loadScript('vendor/xterm/lib/xterm.js').then(() => loadScript('vendor/xterm-fit/lib/addon-fit.js')),
+]);
 
 const sessions = new Map(); // id -> { term, fit, ws, el, info } — kept while the page is open so tabs survive navigation
 
@@ -118,8 +124,9 @@ export async function showTerminal(mount, arg) {
 
   timer = setInterval(async () => { try { stats = await api('api/workspace/stats'); renderStatus(); } catch { /* ignore */ } }, 3000);
 
-  // Re-attach to existing sessions (they keep running on the server), or start one.
-  const list = await api('api/terminal/sessions');
+  // Re-attach to existing sessions (they keep running on the server), or start one. Load the
+  // terminal engine and the session list together so neither blocks the other.
+  const [list] = await Promise.all([api('api/terminal/sessions'), termLibs()]);
   for (const s of list.sessions.filter((x) => x.status !== 'exited')) attach(s);
   if (!list.allowed.ok) { renderTabs(); return empty(list.allowed.reason); }
   if (sessions.size) select(arg && sessions.has(arg) ? arg : [...sessions.keys()][0]); else await create();

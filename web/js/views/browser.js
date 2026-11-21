@@ -1,7 +1,7 @@
 // Isolated browser: Scramjet (service-worker proxy) + a selectable WASM transport (Epoxy or libcurl)
 // over this server's Wisp relay.
 // Server capacity is managed by a queue: when all browser slots are busy, the user sees "You're in line."
-import { api, h, icon, appIcon, BASE, toast, state, fmtTime, logo, pixelBackground } from '../core.js';
+import { api, h, icon, appIcon, BASE, toast, state, fmtTime, logo, pixelBackground, loadScript } from '../core.js';
 import { userMenu } from './shell.js';
 import { historyKey, encryptEntry, decryptEntry } from '../crypto.js';
 
@@ -53,6 +53,9 @@ function setupEngineOnce() {
   if (enginePromise) return enginePromise;
   enginePromise = (async () => {
     if (!('serviceWorker' in navigator)) throw new Error('This browser does not support service workers. Indognito needs HTTPS (or localhost) for its browser.');
+    // Pull in the proxy engine only now that the Browser is actually opened.
+    await loadScript('vendor/scramjet/scramjet.all.js');
+    await loadScript('vendor/baremux/index.js');
     // Order matters: the controller must create its IndexedDB stores before the service worker opens the database.
     await repairEngineDb();
     const { ScramjetController } = $scramjetLoadController();

@@ -1,5 +1,5 @@
 // Onboarding (first Owner account + optional security) and sign-in.
-import { api, h, logo, pixelBackground, field, toast, state, passkeysPossible } from '../core.js';
+import { api, h, logo, pixelBackground, field, toast, state, passkeysPossible, loadScript } from '../core.js';
 import { registerPasskey, setupTotp } from './security.js';
 import { unlockHistory } from '../crypto.js';
 
@@ -99,6 +99,7 @@ export function showLogin(mount) {
     err.textContent = '';
     try {
       const o = await api('api/auth/passkey-options', { method: 'POST', body: {} });
+      await loadScript('vendor/webauthn/index.umd.min.js');
       const response = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: o.options });
       await api('api/auth/passkey', { method: 'POST', body: { challenge: o.challenge, response } });
       await afterLogin();

@@ -1,9 +1,12 @@
 // Passkey + authenticator-app setup dialogs (used by onboarding and Settings).
-import { api, h, modal, field, toast } from '../core.js';
+import { api, h, modal, field, toast, loadScript } from '../core.js';
+
+const webauthn = () => loadScript('vendor/webauthn/index.umd.min.js');
 
 export async function registerPasskey() {
   try {
     const o = await api('api/security/passkey/register-options', { method: 'POST', body: {} });
+    await webauthn();
     const response = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: o.options });
     const name = navigator.userAgent.includes('Mac') ? 'Mac passkey' : navigator.userAgent.includes('Windows') ? 'Windows passkey' : navigator.userAgent.includes('Android') ? 'Android passkey' : 'Passkey';
     await api('api/security/passkey/register', { method: 'POST', body: { challenge: o.challenge, response, name } });
