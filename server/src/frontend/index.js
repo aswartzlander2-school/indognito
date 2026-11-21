@@ -115,12 +115,24 @@ const wellKnown = JSON.stringify({
   relay: { path: '/wisp/', protocol: 'Wisp over WebSocket' },
 }, null, 2);
 
+// The app's internal view modules (everything behind the sign-in) are served only to a request that
+// carries a session cookie, so an unauthenticated visitor viewing the sign-in page cannot download
+// the source of the admin, browser, terminal, files or settings code and learn what's behind it.
+// The sign-in/setup code (onboarding, init, core, crypto, security, app) stays public so the page
+// can render.
+const PROTECTED_MODULE = /^\/js\/views\/(home|browser|terminal|files|admin|settings|shell)\.js$/;
+const hasSession = (req) => /(?:^|;\s*)gnito_sid=[^;]/.test(req.headers.cookie || '');
+
 const handler = (req, res) => {
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
   if (p.startsWith('/api/')) return proxyHttp(req, res);
   if (p === '/.well-known/indognito.json') { res.writeHead(200, { ...baseHeaders(req), 'content-type': 'application/json' }); return res.end(wellKnown); }
   if (p === '/robots.txt') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('User-agent: *\nDisallow: /\n'); }
+  if (PROTECTED_MODULE.test(p) && !hasSession(req)) {
+    res.writeHead(404, { ...baseHeaders(req), 'content-type': 'text/plain' });
+    return res.end('Not found');
+  }
   if (req.method === 'GET' || req.method === 'HEAD') {
     if (serveStatic(req, res, p)) return;
     // SPA fallback for app routes (never for asset-looking paths)

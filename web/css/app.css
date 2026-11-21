@@ -128,8 +128,12 @@ textarea.input { height: auto; min-height: 90px; padding: 12px 16px; resize: ver
 .topbar .clock { font-family: var(--f-display); font-weight: 700; font-size: 20px; color: var(--text-2); }
 .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--brand); display: grid; place-items: center; font-weight: 800; color: #fff; }
 .main { flex: 1; overflow: auto; padding: 4px 28px 40px; scroll-behavior: smooth; }
-.app-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); flex: none; background: var(--bg-2); }
-.app-head h2 { margin: 0; font-family: var(--f-display); font-size: 20px; }
+.app-head { display: flex; align-items: center; gap: 14px; padding: 10px 20px; border-bottom: 1px solid var(--line); flex: none; background: var(--bg-2); }
+.app-head .home-btn { display: inline-flex; align-items: center; padding: 4px 10px 4px 6px; border-radius: 999px; border: 1px solid transparent; background: transparent; cursor: pointer; transition: background .15s, border-color .15s; }
+.app-head .home-btn:hover { background: rgba(255, 255, 255, .06); border-color: var(--line-2); }
+.app-head .head-title { display: inline-flex; align-items: center; gap: 10px; padding-left: 4px; border-left: 1px solid var(--line-2); margin-left: 2px; }
+.app-head .head-title .ico { color: var(--orange); width: 21px; height: 21px; }
+.app-head h2 { margin: 0; font-family: var(--f-display); font-size: 19px; }
 
 /* ---------- home ---------- */
 .main.home { padding: 10px 32px 48px; max-width: 1440px; margin: 0 auto; width: 100%; }

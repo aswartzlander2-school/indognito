@@ -151,6 +151,21 @@ export async function showBrowser(mount) {
       h('button', { class: 'btn primary', style: { marginTop: '16px' }, onclick: () => location.reload() }, 'Try again'))));
   };
 
+  // Opens a short-lived WebSocket to this server's relay for our ticket. Resolves true if it
+  // connects (relay reachable), false if it errors or doesn't open within a few seconds (blocked
+  // or down). Cookies ride along for auth; we close it immediately — the real transport opens its own.
+  function probeRelay(ticket) {
+    return new Promise((resolve) => {
+      const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}wisp/${ticket}/`;
+      let ws;
+      const done = (ok) => { clearTimeout(timer); if (ws) { ws.onopen = ws.onerror = ws.onclose = null; try { ws.close(); } catch { /* ignore */ } } resolve(ok); };
+      const timer = setTimeout(() => done(false), 6000);
+      try { ws = new WebSocket(url); } catch { return done(false); }
+      ws.onopen = () => done(true);
+      ws.onerror = () => done(false);
+    });
+  }
+
   overlay(h('div', { class: 'queue' }, h('div', {}, h('div', { class: 'dots' }, h('i'), h('i'), h('i')), h('h1', { style: { fontSize: '28px' } }, 'Requesting a browser session…'))));
 
   async function request() {
@@ -179,7 +194,11 @@ export async function showBrowser(mount) {
       return;
     }
     if (r.status === 'expired') return request();
-    // active
+    // active — first confirm the relay WebSocket is actually reachable. If it's blocked or down
+    // (e.g. a firewall between the user and this server drops the WebSocket), say so clearly and
+    // stop, instead of loading a tab that silently never connects.
+    overlay(h('div', { class: 'queue' }, h('div', {}, h('div', { class: 'dots' }, h('i'), h('i'), h('i')), h('h1', { style: { fontSize: '26px' } }, 'Connecting to the relay…'))));
+    if (!(await probeRelay(r.ticket))) { setStatus('bad', 'Relay unreachable'); return fail('relay-unreachable'); }
     try {
       engine = await startEngine(r.ticket, r.transport);
     } catch (e) { return fail('network', e.message); }
