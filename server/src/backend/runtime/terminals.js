@@ -70,7 +70,7 @@ export class Terminals extends EventEmitter {
       this.setPhase(s, 'Connecting…');
       s.rt = await this.machines.console(user, limits, { cols: s.cols, rows: s.rows });
     } else {
-      const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, probe: p });
+      const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, user: user.username, probe: p });
       const ev = new EventEmitter();
       child.stdout.on('data', (d) => ev.emit('data', d));
       child.stderr.on('data', (d) => ev.emit('data', Buffer.from(d.toString().replace(/\n/g, '\r\n'))));

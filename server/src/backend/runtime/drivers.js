@@ -26,7 +26,11 @@ export function ptyHelperPath() {
   return which(exe);
 }
 
+// Validated elsewhere (USERNAME regex), but belt-and-suspenders: keep only safe prompt characters.
+function safeName(u) { return String(u || 'user').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 32) || 'user'; }
+
 function sandboxArgs(ws, opts) {
+  const user = safeName(opts.user);
   const a = ['--die-with-parent', '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--hostname', 'gnito',
     '--ro-bind', '/usr', '/usr', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/run'];
   for (const d of ['bin', 'sbin', 'lib', 'lib32', 'lib64', 'libx32']) {
@@ -42,11 +46,11 @@ function sandboxArgs(ws, opts) {
   if (fs.existsSync('/opt')) a.push('--ro-bind', '/opt', '/opt');
   a.push('--bind', ws, '/home/gnito', '--chdir', '/home/gnito');
   if (!opts.network) a.push('--unshare-net');
-  a.push('--clearenv', '--setenv', 'HOME', '/home/gnito', '--setenv', 'USER', 'gnito', '--setenv', 'LOGNAME', 'gnito',
+  a.push('--clearenv', '--setenv', 'HOME', '/home/gnito', '--setenv', 'USER', user, '--setenv', 'LOGNAME', user,
     '--setenv', 'GNITO_MACHINE', '1', // marks this shell as being inside an Indognito machine
     '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin', '--setenv', 'TERM', 'xterm-256color',
     '--setenv', 'LANG', process.env.LANG || 'C.UTF-8', '--setenv', 'SHELL', '/bin/bash',
-    '--setenv', 'PS1', '\\[\\e[1;31m\\]user@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ');
+    '--setenv', 'PS1', `\\[\\e[1;31m\\]${user}@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ `);
   a.push('/bin/bash', '--noprofile', '--norc', '-i');
   return a;
 }
@@ -86,21 +90,22 @@ function defaultShell() {
 }
 
 // Returns a ChildProcess speaking the gnito pty-helper framing on stdin; raw terminal output on stdout.
-export function spawnLocal(kind, { ws, cols, rows, limits, network, probe: p }) {
+export function spawnLocal(kind, { ws, cols, rows, limits, network, user, probe: p }) {
   const helper = ptyHelperPath();
   if (!helper) throw new Error('The gnito PTY helper is missing (expected bin/gnito in the install directory).');
+  const uname = safeName(user);
   let argv;
   let env;
   if (kind === 'sandbox' && p.sandbox) {
-    argv = ['bwrap', ...sandboxArgs(ws, { network })];
+    argv = ['bwrap', ...sandboxArgs(ws, { network, user: uname })];
     env = { PATH: process.env.PATH };
   } else {
     // Unsandboxed host shell — only reached as an explicit, Owner-allowed override (allowedFor
     // refuses it otherwise), e.g. a dev host with no microVM and no working bubblewrap.
     const sh = defaultShell();
     argv = [sh.cmd, ...sh.args];
-    env = { ...cleanEnv(), HOME: ws, USERPROFILE: ws, TERM: 'xterm-256color', GNITO_WORKSPACE: ws, GNITO_MACHINE: '1',
-      PS1: '\\[\\e[1;31m\\]user@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ' };
+    env = { ...cleanEnv(), HOME: ws, USERPROFILE: ws, USER: uname, LOGNAME: uname, TERM: 'xterm-256color', GNITO_WORKSPACE: ws, GNITO_MACHINE: '1',
+      PS1: `\\[\\e[1;31m\\]${uname}@gnito\\[\\e[0m\\]:\\[\\e[1;33m\\]\\w\\[\\e[0m\\]\\$ ` };
   }
   if (p.limits === 'cgroup' && limits) {
     argv = ['systemd-run', '--user', '--scope', '--quiet', '-p', `MemoryMax=${limits.ram_mb}M`,
