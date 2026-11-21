@@ -104,6 +104,15 @@ const P = {
   gamepad: 'M7 9h10a4 4 0 0 1 4 4v.5a3 3 0 0 1-5.5 1.7L14.5 14h-5l-1 1.2A3 3 0 0 1 3 13.5V13a4 4 0 0 1 4-4Zm.5 2v3M6 12.5h3M15 12h.01M17 14h.01',
   puzzle: 'M10 4a2 2 0 1 1 4 0h3v3a2 2 0 1 1 0 4v3h-3a2 2 0 1 0-4 0H7v-3a2 2 0 1 1 0-4V4Z',
 };
+// An app/catalog icon: the site's real favicon (fetched and cached by our server, served from this
+// origin), falling back to the line icon if there's no usable favicon. `app` needs { id, icon }.
+export function appIcon(app, fallback = 'globe') {
+  const fb = icon(app?.icon || fallback);
+  if (!app?.id) return fb;
+  const img = h('img', { class: 'app-fav', src: `${BASE}api/favicon?id=${encodeURIComponent(app.id)}`, alt: '', loading: 'lazy' });
+  img.addEventListener('error', () => img.replaceWith(fb), { once: true });
+  return img;
+}
 export function icon(name, cls = 'ico') {
   const ns = 'http://www.w3.org/2000/svg';
   const s = document.createElementNS(ns, 'svg');

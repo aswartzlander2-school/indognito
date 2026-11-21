@@ -1,7 +1,7 @@
 // Isolated browser: Scramjet (service-worker proxy) + a selectable WASM transport (Epoxy or libcurl)
 // over this server's Wisp relay.
 // Server capacity is managed by a queue: when all browser slots are busy, the user sees "You're in line."
-import { api, h, icon, BASE, toast, state, fmtTime, logo, pixelBackground } from '../core.js';
+import { api, h, icon, appIcon, BASE, toast, state, fmtTime, logo, pixelBackground } from '../core.js';
 import { userMenu } from './shell.js';
 import { historyKey, encryptEntry, decryptEntry } from '../crypto.js';
 
@@ -280,7 +280,7 @@ export async function showBrowser(mount) {
       const { apps } = await api('api/apps');
       const cats = [...new Set(apps.map((a) => a.category))];
       groups.replaceChildren(...cats.map((c) => h('section', {}, h('h4', {}, c),
-        h('div', { class: 'quick' }, apps.filter((a) => a.category === c).map((a) => h('button', { onclick: () => go(t, a.url) }, icon(a.icon), a.name))))));
+        h('div', { class: 'quick' }, apps.filter((a) => a.category === c).map((a) => h('button', { onclick: () => go(t, a.url) }, appIcon(a), a.name))))));
     } catch { /* ignore */ }
   }
 

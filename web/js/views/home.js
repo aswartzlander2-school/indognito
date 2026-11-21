@@ -1,5 +1,5 @@
 // Home screen: "My Workspace" dashboard + TV-style tile rows.
-import { api, h, icon, logo, meter, fmtBytes, state, toast } from '../core.js';
+import { api, h, icon, appIcon, logo, meter, fmtBytes, state, toast } from '../core.js';
 import { go } from '../app.js';
 import { userMenu } from './shell.js';
 
@@ -12,8 +12,9 @@ const _TILE_BG = {
 const APP_BG = ['linear-gradient(140deg,#e5322d,#8f1712)', 'linear-gradient(140deg,#ff6a2b,#b33d10)', 'linear-gradient(140deg,#c2410c,#5c1d06)',
   'linear-gradient(140deg,#be123c,#4c0519)', 'linear-gradient(140deg,#9a3412,#431407)', 'linear-gradient(140deg,#b45309,#451a03)'];
 
-function tile(name, desc, ic, bg, onclick) {
-  return h('button', { class: 'tile', style: { '--tile-bg': bg }, onclick, 'aria-label': `${name}: ${desc}` }, icon(ic), h('b', {}, name), h('small', {}, desc));
+function tile(app, desc, bg, onclick) {
+  return h('button', { class: 'tile', style: { '--tile-bg': bg }, onclick, 'aria-label': `${app.name}: ${desc}` },
+    appIcon(app), h('b', {}, app.name), h('small', {}, desc));
 }
 
 export async function showHome(mount) {
@@ -71,7 +72,7 @@ export async function showHome(mount) {
     let n = 0;
     rows.replaceChildren(...cats.map((c) => [
       h('h3', { class: 'row-title' }, c),
-      h('div', { class: 'tiles' }, apps.filter((a) => a.category === c).map((a) => tile(a.name, a.description || new URL(a.url).hostname, a.icon, APP_BG[n++ % APP_BG.length],
+      h('div', { class: 'tiles' }, apps.filter((a) => a.category === c).map((a) => tile(a, a.description || new URL(a.url).hostname, APP_BG[n++ % APP_BG.length],
         () => { sessionStorage.setItem('gnito.open', a.url); go('browser'); }))),
     ]).flat());
     if (!apps.length) rows.append(h('p', { class: 'muted' }, 'No applications yet. Administrators can add them in Administration → Applications.'));

@@ -389,6 +389,56 @@ export function registerRoutes(router, ctx) {
     send(res, 200, { apps: db.prepare('SELECT * FROM apps WHERE enabled = 1 ORDER BY sort, name').all() });
   });
 
+  // Real site icons for catalog apps. The server (not the user's browser) fetches the favicon and
+  // serves it from this origin, so tiles show a site's true icon without the client ever contacting
+  // the site directly or a third-party favicon service — and it stays within the page's CSP. Only
+  // admin-curated catalog URLs are fetched (no arbitrary host → no SSRF); results are cached.
+  const favCache = new Map(); // appId -> { buf, type, exp }
+  const isPrivateHost = (host) => /^(localhost|127\.|10\.|192\.168\.|169\.254\.|::1|\[?fc|\[?fd)/i.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  async function fetchFavicon(appUrl) {
+    const u0 = new URL(appUrl);
+    if (u0.protocol !== 'https:' && u0.protocol !== 'http:') return null;
+    if (isPrivateHost(u0.hostname)) return null;
+    const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 5000);
+    const get = (url) => fetch(url, { signal: ac.signal, redirect: 'follow', headers: { 'user-agent': 'Indognito-favicon/1.0', accept: '*/*' } });
+    try {
+      let iconUrl = u0.origin + '/favicon.ico';
+      try {
+        const r = await get(appUrl);
+        if (r.ok && /text\/html/i.test(r.headers.get('content-type') || '')) {
+          const html = (await r.text()).slice(0, 200_000);
+          const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]).filter((t) => /rel=["'][^"']*\bicon\b/i.test(t));
+          // Prefer an explicit size (apple-touch / sized icons tend to be crisp), else the first.
+          const pick = links.find((t) => /apple-touch-icon|sizes=["'](?:\d{2,})/i.test(t)) || links[0];
+          const href = pick?.match(/href=["']([^"']+)["']/i)?.[1];
+          if (href) iconUrl = new URL(href, r.url || appUrl).href;
+        }
+      } catch { /* fall back to /favicon.ico */ }
+      if (isPrivateHost(new URL(iconUrl).hostname)) return null;
+      const fr = await get(iconUrl);
+      if (!fr.ok) return null;
+      const type = (fr.headers.get('content-type') || 'image/x-icon').split(';')[0].trim();
+      if (!/^image\//i.test(type) && type !== 'image/x-icon') return null;
+      const buf = Buffer.from(await fr.arrayBuffer());
+      if (buf.length < 70 || buf.length > 512 * 1024) return null; // skip empty/placeholder 1x1s and oversized
+      return { buf, type: type || 'image/x-icon' };
+    } catch { return null; } finally { clearTimeout(to); }
+  }
+  router.get('/api/favicon', async (req, res, { query }) => {
+    needUser(req);
+    const id = query.get('id');
+    const app = id && db.prepare('SELECT url FROM apps WHERE id = ? AND enabled = 1').get(id);
+    if (!app) return send(res, 404, { error: 'Unknown app' });
+    let c = favCache.get(id);
+    if (!c || c.exp < Date.now()) {
+      const fav = await fetchFavicon(app.url);
+      c = { buf: fav?.buf || null, type: fav?.type || null, exp: Date.now() + (fav ? 7 * 864e5 : 36e5) };
+      favCache.set(id, c);
+    }
+    if (!c.buf) return send(res, 204, '');
+    send(res, 200, c.buf, { 'content-type': c.type, 'cache-control': 'public, max-age=86400' });
+  });
+
   // On the isolated-microVM runtime the File Explorer operates on the user's VM (same machine as
   // the terminal); otherwise on the host workspace folder.
   if (ctx.machines?.enabled && terminals.probe().selected === 'microvm') registerMachineFileRoutes(router, { machines: ctx.machines, needUser });
