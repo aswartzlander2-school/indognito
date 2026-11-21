@@ -14,7 +14,7 @@ const NM = path.join(APP_ROOT, 'server', 'node_modules');
 // URL prefix -> directory. Only these trees are served.
 const MOUNTS = [
   ['/vendor/scramjet/', path.join(NM, '@mercuryworkshop/scramjet/dist')],
-  ['/vendor/baremux/', path.join(NM, '@mercuryworkshop/bare-mux/dist')],
+  ['/vendor/controller/', path.join(NM, '@mercuryworkshop/scramjet-controller/dist')],
   ['/vendor/epoxy/', path.join(NM, '@mercuryworkshop/epoxy-transport/dist')],
   ['/vendor/libcurl/', path.join(NM, '@mercuryworkshop/libcurl-transport/dist')],
   ['/vendor/xterm/', path.join(NM, '@xterm/xterm')],
