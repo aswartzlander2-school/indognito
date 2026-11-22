@@ -229,15 +229,28 @@ export async function showBrowser(mount) {
     return false;
   }
 
+  // Turn a proxied frame URL (<origin><BASE>service/<controller>/<frame>/<encoded real url>) back
+  // into the real address for the tab/address bar.
+  function decodeProxied(href) {
+    try {
+      const u = new URL(href);
+      const marker = BASE + 'service/';
+      if (u.origin !== location.origin || !u.pathname.startsWith(marker)) return null;
+      const enc = u.pathname.slice(marker.length).split('/').slice(2).join('/'); // drop controller + frame ids
+      if (!enc) return null;
+      const real = decodeURIComponent(enc) + (u.search || '') + (u.hash || '');
+      return /^https?:\/\//i.test(real) ? real : null;
+    } catch { return null; }
+  }
+
   // Scramjet 2.x has no urlchange event, but the proxied iframe is same-origin, so we read its real
   // location (decoded) and title on load and on a short poll (to catch in-page SPA navigations).
   function syncFrame(t) {
     try {
       const href = t.iframe.contentWindow?.location?.href;
       if (!href) return;
-      let real = href;
-      try { if (window.$scramjet && typeof $scramjet.unrewriteUrl === 'function') real = $scramjet.unrewriteUrl(href) || href; } catch { /* keep href */ }
-      if (real && /^https?:/i.test(real) && real !== t.url) {
+      const real = decodeProxied(href);
+      if (real && real !== t.url) {
         t.url = real; t.favicon = null;
         if (t.id === active) { addr.value = real; setSecure(real); }
         recordHistory(t); renderTabs();

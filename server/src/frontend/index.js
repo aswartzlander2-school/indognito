@@ -37,7 +37,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'", // unsafe-eval: Scramjet's controller compiles its URL codec at runtime
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:", "font-src 'self' data:", "connect-src 'self' ws: wss:", "worker-src 'self' blob:",
+  "img-src 'self' data: blob:", "font-src 'self' data:", "connect-src 'self' data: blob: ws: wss:", "worker-src 'self' blob:",
   "frame-src 'self' blob:", "media-src 'self' blob:", "object-src 'none'", "base-uri 'self'", "form-action 'self'",
   "frame-ancestors 'self'",
 ].join('; ');
