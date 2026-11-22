@@ -18,14 +18,22 @@ export class Terminals extends EventEmitter {
 
   allowedFor(user) {
     const p = this.probe();
+    const allowUnsandboxed = this.settings.get('runtime.allowUnsandboxed', false);
     if (p.selected === 'microvm') {
       if (!this.machines?.enabled) return { ok: false, reason: 'Terminals run in an isolated Linux microVM. The Owner needs to connect a MicroVM-Playground server first (set runtime.microvm.url in the server config).' };
       return { ok: true };
     }
-    // Explicit sandbox/process override (advanced; not isolated like the microVM).
     if (!p.pty) return { ok: false, reason: 'The PTY helper is missing from this installation.' };
-    if (p.selected === 'process' && !user.is_owner && !this.settings.get('runtime.allowUnsandboxed', false)) {
-      return { ok: false, reason: 'Terminals for other accounts need sandboxing or a microVM. The Owner can connect a MicroVM-Playground server, or allow unsandboxed terminals in Admin → System.' };
+    if (p.selected === 'sandbox') {
+      // Isolated when bubblewrap works. Otherwise the terminal would be unsandboxed, which is only
+      // allowed if the Owner explicitly turned it on — never silently.
+      if (p.sandbox) return { ok: true };
+      if (allowUnsandboxed) return { ok: true };
+      return { ok: false, reason: `Terminals must be isolated, but neither a microVM nor a bubblewrap sandbox is available on this host${p.sandboxReason ? ` (${p.sandboxReason})` : ''}. Connect a MicroVM-Playground server (runtime.microvm.url), or explicitly allow unsandboxed terminals in Admin → System.` };
+    }
+    // Explicit 'process' driver — unsandboxed; Owner-gated.
+    if (!user.is_owner && !allowUnsandboxed) {
+      return { ok: false, reason: 'Unsandboxed terminals are disabled. The Owner can connect a MicroVM-Playground server, or allow unsandboxed terminals in Admin → System.' };
     }
     return { ok: true };
   }
@@ -38,8 +46,12 @@ export class Terminals extends EventEmitter {
     const allowed = this.allowedFor(user);
     if (!allowed.ok) { const e = new Error(allowed.reason); e.status = 403; throw e; }
     const id = crypto.randomBytes(9).toString('base64url');
+    const p = this.probe();
+    // Report the driver that will actually run: if 'sandbox' is selected but bubblewrap can't run
+    // here, the shell is really an unsandboxed process — don't claim isolation we aren't providing.
+    const driver = p.selected === 'sandbox' && !p.sandbox ? 'process' : p.selected;
     const s = {
-      id, userId: user.id, username: user.username, status: 'allocating', phase: 'Allocating runtime…', driver: this.probe().selected,
+      id, userId: user.id, username: user.username, status: 'allocating', phase: 'Allocating runtime…', driver,
       created: Date.now(), cols, rows, buf: [], bufLen: 0, clients: new Set(), rt: null, exitReason: null,
       title: `Session ${mine.length + 1}`,
       pids: () => s.rt?.pids || [],
@@ -62,7 +74,7 @@ export class Terminals extends EventEmitter {
       this.setPhase(s, 'Connecting…');
       s.rt = await this.machines.console(user, limits, { cols: s.cols, rows: s.rows });
     } else {
-      const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, probe: p });
+      const child = spawnLocal(s.driver, { ws, cols: s.cols, rows: s.rows, limits, network, user: user.username, probe: p });
       const ev = new EventEmitter();
       child.stdout.on('data', (d) => ev.emit('data', d));
       child.stderr.on('data', (d) => ev.emit('data', Buffer.from(d.toString().replace(/\n/g, '\r\n'))));
